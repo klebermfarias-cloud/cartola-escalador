@@ -44,7 +44,7 @@ export const MODELO_PADRAO: ModeloConfig = {
   pesoMediana: 10,
   pesoBasica: 10,
   pesoAdversario: 40,
-  pesoNivel: 40,
+  pesoNivel: 70,
   perfil: "equilibrado",
   minJogos: 3,
   incluirDuvida: false,

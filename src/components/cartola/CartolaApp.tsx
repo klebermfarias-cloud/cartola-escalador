@@ -419,11 +419,6 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                     onSelect={setDetalhe}
                   />
                 ))}
-                {escalacao && !temMaisEscalados && (
-                  <p className="pt-2 text-[11px] leading-snug text-muted-foreground">
-                    Os mais escalados da rodada não vieram na última coleta da API do Cartola.
-                  </p>
-                )}
                 {banco.reservas.length > 0 && (
                   <div className="pt-3">
                     <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
