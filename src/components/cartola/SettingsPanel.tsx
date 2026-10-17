@@ -28,8 +28,8 @@ const PESOS: { key: keyof ModeloConfig; label: string; hint: string }[] = [
   { key: "pesoMedia", label: "Média geral", hint: "Média de todas as rodadas jogadas" },
   {
     key: "pesoMando",
-    label: "Média do mando",
-    hint: "Média em casa ou fora, conforme o jogo da rodada",
+    label: "Fator casa/fora",
+    hint: "Desempenho do jogador em casa ou fora, conforme o jogo da rodada, somado à vantagem de mando da posição na liga",
   },
   {
     key: "pesoForma",
@@ -44,8 +44,13 @@ const PESOS: { key: keyof ModeloConfig; label: string; hint: string }[] = [
   },
   {
     key: "pesoAdversario",
-    label: "Força do adversário",
+    label: "Pontos cedidos pelo adversário",
     hint: "Quanto o adversário cede de pontos para a posição",
+  },
+  {
+    key: "pesoNivel",
+    label: "Nível do adversário (tabela)",
+    hint: "Faixa do adversário na tabela: muito difícil (1º-5º), difícil (6º-10º), fácil (11º-15º), muito fácil (16º-20º)",
   },
 ];
 
@@ -173,8 +178,8 @@ export function SettingsPanel({ orcamento, onOrcamento, formacao, onFormacao, cf
           </div>
         ))}
         <p className="text-[11px] leading-snug text-muted-foreground">
-          Os pesos das médias são relativos entre si. A força do adversário vai de 0 (ignora) a 100
-          (aplica toda a diferença entre o que o adversário cede e a média da posição).
+          Os pesos das médias são relativos entre si. Os dois ajustes de adversário vão de 0
+          (ignora) a 100 (aplica todo o efeito medido na temporada).
         </p>
       </div>
     </div>

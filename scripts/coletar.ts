@@ -148,7 +148,9 @@ async function main() {
   for (let r = 1; r < rodadaAtual; r++) {
     const arquivo = path.join(DIR_RODADAS, `${temporada}-${String(r).padStart(2, "0")}.json`);
     const cache = lerJson<RodadaHistorica>(arquivo);
-    if (cache && Object.keys(cache.pontos).length > 0) {
+    // Caches antigos não têm a posição do adversário na tabela: baixa de novo.
+    const cacheCompleto = Object.values(cache?.confrontos ?? {}).every((c) => "posAdv" in c);
+    if (cache && Object.keys(cache.pontos).length > 0 && cacheCompleto) {
       rodadas.push(cache);
       continue;
     }

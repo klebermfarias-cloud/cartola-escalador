@@ -4,6 +4,7 @@ import type {
   Confronto,
   EstatisticasAtleta,
   Jogo,
+  NivelAdversario,
   RodadaHistorica,
 } from "./types";
 
@@ -55,8 +56,18 @@ export function confrontosDaRodada(
   const out: Record<string, Confronto> = {};
   for (const p of partidas?.partidas ?? []) {
     const valida = p.valida !== false;
-    out[String(p.clube_casa_id)] = { mando: "C", adversario: p.clube_visitante_id, valida };
-    out[String(p.clube_visitante_id)] = { mando: "F", adversario: p.clube_casa_id, valida };
+    out[String(p.clube_casa_id)] = {
+      mando: "C",
+      adversario: p.clube_visitante_id,
+      valida,
+      posAdv: p.clube_visitante_posicao ?? null,
+    };
+    out[String(p.clube_visitante_id)] = {
+      mando: "F",
+      adversario: p.clube_casa_id,
+      valida,
+      posAdv: p.clube_casa_posicao ?? null,
+    };
   }
   return out;
 }
@@ -76,6 +87,15 @@ export function compactarRodada(
     pontos[id] = [round2(p), g, as, a.clube_id, a.posicao_id];
   }
   return { rodada, pontos, confrontos: confrontosDaRodada(partidas) };
+}
+
+/** Faixa de dificuldade pela posição do adversário na tabela: 1-5, 6-10, 11-15, 16-20. */
+export function nivelAdversario(posicaoTabela: number | null | undefined): NivelAdversario | null {
+  if (posicaoTabela == null || !Number.isFinite(posicaoTabela) || posicaoTabela < 1) return null;
+  if (posicaoTabela <= 5) return "muito-dificil";
+  if (posicaoTabela <= 10) return "dificil";
+  if (posicaoTabela <= 15) return "facil";
+  return "muito-facil";
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +119,8 @@ export function estatisticasVazias(): EstatisticasAtleta {
     pctPositivos: 0,
     participacao: 0,
     tendencia: 0,
+    pctAcimaCasa: null,
+    pctAcimaFora: null,
     historico: [],
   };
 }
@@ -112,6 +134,8 @@ export function calcularEstatisticas(jogos: Jogo[], rodadasDoClube: number): Est
   const ultimas = hist.slice(-ULTIMAS_N).map((j) => j.pontos);
   const media = mean(pts);
   const mediaUltimas = ultimas.length ? mean(ultimas) : null;
+  const pctAcima = (xs: number[]) =>
+    xs.length ? xs.filter((p) => p > media).length / xs.length : null;
   return {
     jogos: hist.length,
     media,
@@ -129,6 +153,8 @@ export function calcularEstatisticas(jogos: Jogo[], rodadasDoClube: number): Est
     pctPositivos: pts.filter((p) => p > 0).length / pts.length,
     participacao: rodadasDoClube > 0 ? Math.min(1, hist.length / rodadasDoClube) : 1,
     tendencia: mediaUltimas != null ? mediaUltimas - media : 0,
+    pctAcimaCasa: pctAcima(casa),
+    pctAcimaFora: pctAcima(fora),
     historico: hist,
   };
 }
@@ -144,6 +170,10 @@ export interface ResumoHistorico {
   cedidas: Map<string, { soma: number; n: number }>;
   /** `${clube}:${pos}:${mandoDoClube}` -> pontos cedidos separados por mando */
   cedidasMando: Map<string, { soma: number; n: number }>;
+  /** `${pos}:${mando}` -> pontos da posição jogando em casa (C) ou fora (F) */
+  porPosicaoMando: Map<string, { soma: number; n: number }>;
+  /** `${pos}:${nivel}` -> pontos da posição contra cada faixa de adversário */
+  porPosicaoNivel: Map<string, { soma: number; n: number }>;
 }
 
 function acumular(map: Map<string, { soma: number; n: number }>, key: string, v: number) {
@@ -160,6 +190,8 @@ export function resumirHistorico(rodadas: RodadaHistorica[]): ResumoHistorico {
   const somaPos = new Map<number, { soma: number; n: number }>();
   const cedidas = new Map<string, { soma: number; n: number }>();
   const cedidasMando = new Map<string, { soma: number; n: number }>();
+  const porPosicaoMando = new Map<string, { soma: number; n: number }>();
+  const porPosicaoNivel = new Map<string, { soma: number; n: number }>();
 
   for (const r of rodadas) {
     for (const [clube, c] of Object.entries(r.confrontos)) {
@@ -174,6 +206,7 @@ export function resumirHistorico(rodadas: RodadaHistorica[]): ResumoHistorico {
         basica: round2(p - g * PONTOS_GOL - a * PONTOS_ASSISTENCIA),
         mando: conf?.mando ?? null,
         adversario: conf?.adversario ?? null,
+        nivelAdversario: nivelAdversario(conf?.posAdv),
       };
       const atletaId = Number(id);
       const lista = jogosPorAtleta.get(atletaId);
@@ -191,6 +224,8 @@ export function resumirHistorico(rodadas: RodadaHistorica[]): ResumoHistorico {
         // mando do adversário (quem cedeu): oposto ao do atleta
         const mandoAdv = conf.mando === "C" ? "F" : "C";
         acumular(cedidasMando, `${conf.adversario}:${pos}:${mandoAdv}`, p);
+        acumular(porPosicaoMando, `${pos}:${conf.mando}`, p);
+        if (jogo.nivelAdversario) acumular(porPosicaoNivel, `${pos}:${jogo.nivelAdversario}`, p);
       }
     }
   }
@@ -198,5 +233,13 @@ export function resumirHistorico(rodadas: RodadaHistorica[]): ResumoHistorico {
   const mediaPorPosicao = new Map<number, number>();
   for (const [pos, { soma, n }] of somaPos) mediaPorPosicao.set(pos, n ? soma / n : 0);
 
-  return { jogosPorAtleta, rodadasPorClube, mediaPorPosicao, cedidas, cedidasMando };
+  return {
+    jogosPorAtleta,
+    rodadasPorClube,
+    mediaPorPosicao,
+    cedidas,
+    cedidasMando,
+    porPosicaoMando,
+    porPosicaoNivel,
+  };
 }

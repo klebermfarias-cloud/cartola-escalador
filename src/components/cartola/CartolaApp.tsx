@@ -21,8 +21,9 @@ import {
   type ModeloConfig,
 } from "@/lib/cartola/projection";
 import { resumirHistorico } from "@/lib/cartola/stats";
-import type { AtletaProjetado } from "@/lib/cartola/types";
-import { POSICOES } from "@/lib/cartola/types";
+import type { AtletaProjetado, NivelAdversario } from "@/lib/cartola/types";
+import { NIVEIS_ADVERSARIO, POSICOES } from "@/lib/cartola/types";
+import { COR_NIVEL } from "./Indicadores";
 import { cn } from "@/lib/utils";
 import { fmt, fmtEscalacoes, STATUS_MERCADO } from "./format";
 import { PlayerDetailDialog } from "./PlayerDetailDialog";
@@ -356,9 +357,10 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                     onSelect={setDetalhe}
                   />
                   <p className="text-center text-xs text-muted-foreground">
-                    Toque no jogador para ver as estatísticas e no botão embaixo dele para trocar
+                    Toque no jogador para ver as estatísticas e no botão embaixo dele para trocar{" "}
                     {opcao === "popular" ? "pelo mais escalado" : "pela 2ª opção"} da posição.
                   </p>
+                  <LegendaNivel />
                 </>
               ) : (
                 <Card>
@@ -509,6 +511,17 @@ function ComoFunciona() {
           considerando o mando.
         </li>
         <li>
+          Fator casa/fora: a média do jogador em casa ou fora (conforme o jogo da rodada) é
+          combinada com a vantagem de mando da posição em toda a liga. A página mostra quantos
+          pontos isso soma ou tira da média dele e a chance de ele pontuar acima da própria média
+          nesse mando.
+        </li>
+        <li>
+          Nível do adversário: pela posição na tabela, o adversário entra numa de 4 faixas (muito
+          difícil do 1º ao 5º, difícil do 6º ao 10º, fácil do 11º ao 15º e muito fácil do 16º ao
+          20º). O efeito de cada faixa é medido na temporada, por posição, e ajusta a projeção.
+        </li>
+        <li>
           O perfil conservador penaliza o desvio padrão; o arrojado o favorece. Jogadores em dúvida
           perdem 25% da projeção, e quem entrou em campo em menos da metade dos jogos do clube perde
           até 25%.
@@ -646,6 +659,20 @@ function AlternativaRow({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function LegendaNivel() {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+      <span>Nível do adversário (ponto ao lado do adversário):</span>
+      {(Object.keys(NIVEIS_ADVERSARIO) as NivelAdversario[]).map((n) => (
+        <span key={n} className="flex items-center gap-1">
+          <span className={cn("inline-block h-2 w-2 rounded-full", COR_NIVEL[n])} />
+          {NIVEIS_ADVERSARIO[n].rotulo}
+        </span>
+      ))}
     </div>
   );
 }

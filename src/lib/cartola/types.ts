@@ -117,11 +117,23 @@ export interface ApiPontuados {
 
 export type Mando = "C" | "F";
 
+/** Faixa de dificuldade do adversário pela posição na tabela (4 níveis de 5 posições). */
+export type NivelAdversario = "muito-dificil" | "dificil" | "facil" | "muito-facil";
+
+export const NIVEIS_ADVERSARIO: Record<NivelAdversario, { rotulo: string; faixa: string }> = {
+  "muito-dificil": { rotulo: "Muito difícil", faixa: "1º ao 5º" },
+  dificil: { rotulo: "Difícil", faixa: "6º ao 10º" },
+  facil: { rotulo: "Fácil", faixa: "11º ao 15º" },
+  "muito-facil": { rotulo: "Muito fácil", faixa: "16º ao 20º" },
+};
+
 /** Confronto de um clube numa rodada. */
 export interface Confronto {
   mando: Mando;
   adversario: number;
   valida: boolean;
+  /** Posição do adversário na tabela naquela rodada (quando a API informa). */
+  posAdv?: number | null;
 }
 
 /** Dados compactos de uma rodada já encerrada. */
@@ -139,6 +151,7 @@ export interface Jogo {
   basica: number;
   mando: Mando | null;
   adversario: number | null;
+  nivelAdversario: NivelAdversario | null;
 }
 
 export interface EstatisticasAtleta {
@@ -162,6 +175,9 @@ export interface EstatisticasAtleta {
   participacao: number;
   /** Forma - média geral. */
   tendencia: number;
+  /** % dos jogos em casa / fora em que pontuou acima da própria média geral. */
+  pctAcimaCasa: number | null;
+  pctAcimaFora: number | null;
   historico: Jogo[];
 }
 
@@ -202,6 +218,14 @@ export interface AtletaProjetado extends Atleta {
   cedidasAdversario: number | null;
   /** Ajuste (em pontos) aplicado pelo confronto. */
   ajusteAdversario: number;
+  /** Fator casa/fora: diferença esperada (pts) em relação à média geral pelo mando do jogo. */
+  ajusteMando: number;
+  /** Chance estimada de pontuar acima da própria média geral, dado o mando do jogo. */
+  chanceMando: number | null;
+  /** Faixa de dificuldade do adversário pela tabela. */
+  nivelAdversario: NivelAdversario | null;
+  /** Ajuste (em pontos) aplicado pela faixa de dificuldade do adversário. */
+  ajusteNivel: number;
   elegivel: boolean;
   motivoInelegivel?: string;
 }

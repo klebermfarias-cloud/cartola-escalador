@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { calcularEstatisticas, compactarRodada, median, resumirHistorico, stdDev } from "./stats";
+import {
+  calcularEstatisticas,
+  compactarRodada,
+  median,
+  nivelAdversario,
+  resumirHistorico,
+  stdDev,
+} from "./stats";
 import { MODELO_PADRAO, montarAtletas, projetarAtletas } from "./projection";
 import { escalar, escolherBanco, FORMACOES, ganhoEsperado } from "./optimizer";
 import type { ApiMercado, ApiPartidas, AtletaProjetado, Jogo, PosicaoId } from "./types";
@@ -18,6 +25,7 @@ describe("estatísticas básicas", () => {
       basica: r - 1,
       mando: r % 2 ? "C" : "F",
       adversario: 99,
+      nivelAdversario: null,
     }));
     const s = calcularEstatisticas(jogos, 10);
     expect(s.jogos).toBe(7);
@@ -77,6 +85,10 @@ function fakeAtleta(id: number, pos: PosicaoId, score: number, preco: number): A
     score,
     cedidasAdversario: null,
     ajusteAdversario: 0,
+    ajusteMando: 0,
+    chanceMando: null,
+    nivelAdversario: null,
+    ajusteNivel: 0,
     elegivel: true,
   };
 }
@@ -245,5 +257,105 @@ describe("atribuição dos mais escalados", () => {
     expect(r[2]?.id).toBe(2); // titular já é mais escalado
     expect(r[1]?.id).toBe(10);
     expect(r[3]).toBeNull(); // nenhum goleiro entre os mais escalados
+  });
+});
+
+describe("indicadores de mando e nível do adversário", () => {
+  it("classifica o adversário em 4 faixas pela tabela", () => {
+    expect(nivelAdversario(1)).toBe("muito-dificil");
+    expect(nivelAdversario(5)).toBe("muito-dificil");
+    expect(nivelAdversario(6)).toBe("dificil");
+    expect(nivelAdversario(10)).toBe("dificil");
+    expect(nivelAdversario(11)).toBe("facil");
+    expect(nivelAdversario(15)).toBe("facil");
+    expect(nivelAdversario(16)).toBe("muito-facil");
+    expect(nivelAdversario(20)).toBe("muito-facil");
+    expect(nivelAdversario(null)).toBeNull();
+    expect(nivelAdversario(0)).toBeNull();
+  });
+
+  // Atleta 10 (clube 1) e 20 (clube 3), ambos atacantes, 8 rodadas alternando o mando.
+  // Em casa fazem 8 pontos, fora 2. Os adversários alternam entre o 2º e o 18º da tabela.
+  function cenario(proximo: { mando: "C" | "F"; posAdv: number }) {
+    const rodadas = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => {
+      const casa = r % 2 === 1;
+      const posAdv = r % 4 < 2 ? 2 : 18;
+      const pts = casa ? 8 : 2;
+      return compactarRodada(
+        r,
+        {
+          atletas: {
+            "10": { pontuacao: pts, posicao_id: 5, clube_id: 1, scout: {} },
+            "20": { pontuacao: pts, posicao_id: 5, clube_id: 3, scout: {} },
+          },
+        },
+        {
+          partidas: [
+            casa
+              ? { clube_casa_id: 1, clube_visitante_id: 2, clube_visitante_posicao: posAdv }
+              : { clube_casa_id: 2, clube_visitante_id: 1, clube_casa_posicao: posAdv },
+            casa
+              ? { clube_casa_id: 3, clube_visitante_id: 4, clube_visitante_posicao: posAdv }
+              : { clube_casa_id: 4, clube_visitante_id: 3, clube_casa_posicao: posAdv },
+          ],
+        },
+      );
+    });
+    const resumo = resumirHistorico(rodadas);
+    const mercado: ApiMercado = {
+      clubes: {},
+      atletas: [
+        {
+          atleta_id: 10,
+          apelido: "X",
+          clube_id: 1,
+          posicao_id: 5,
+          status_id: 7,
+          pontos_num: 0,
+          media_num: 5,
+          preco_num: 10,
+          variacao_num: 0,
+          jogos_num: 8,
+        },
+      ],
+    };
+    const partidas: ApiPartidas = {
+      partidas: [
+        proximo.mando === "C"
+          ? {
+              clube_casa_id: 1,
+              clube_visitante_id: 9,
+              clube_visitante_posicao: proximo.posAdv,
+              valida: true,
+            }
+          : {
+              clube_casa_id: 9,
+              clube_visitante_id: 1,
+              clube_casa_posicao: proximo.posAdv,
+              valida: true,
+            },
+      ],
+    };
+    return projetarAtletas(montarAtletas(mercado, resumo, partidas), resumo, MODELO_PADRAO)[0];
+  }
+
+  it("dá vantagem a quem rende mais em casa quando joga em casa", () => {
+    const casa = cenario({ mando: "C", posAdv: 12 });
+    const fora = cenario({ mando: "F", posAdv: 12 });
+    expect(casa.ajusteMando).toBeGreaterThan(1);
+    expect(fora.ajusteMando).toBeLessThan(-1);
+    expect(casa.chanceMando!).toBeGreaterThan(0.5);
+    expect(fora.chanceMando!).toBeLessThan(0.5);
+    expect(casa.projecao).toBeGreaterThan(fora.projecao);
+  });
+
+  it("projeta menos contra adversário do topo da tabela", () => {
+    const dificil = cenario({ mando: "C", posAdv: 2 });
+    const facil = cenario({ mando: "C", posAdv: 19 });
+    expect(dificil.nivelAdversario).toBe("muito-dificil");
+    expect(facil.nivelAdversario).toBe("muito-facil");
+    expect(dificil.ajusteNivel).toBeLessThan(0);
+    expect(facil.ajusteNivel).toBeGreaterThan(0);
+    expect(facil.projecao).toBeGreaterThan(dificil.projecao);
   });
 });

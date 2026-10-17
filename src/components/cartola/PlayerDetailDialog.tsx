@@ -29,6 +29,7 @@ import {
   STATUS_NOMES,
   type Clubes,
 } from "./format";
+import { AjusteMando, NivelBadge } from "./Indicadores";
 
 const SCOUT_NOMES: Record<string, string> = {
   G: "Gols",
@@ -195,6 +196,49 @@ export function PlayerDetailDialog({
                 value={`${a.ajusteAdversario >= 0 ? "+" : ""}${fmt(a.ajusteAdversario, 2)}`}
               />
             </div>
+
+            {a.proximo && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-md border px-3 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Fator casa/fora
+                  </div>
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    {a.proximo.mando === "C" ? "Joga em casa" : "Joga fora"}
+                    <AjusteMando a={a} />
+                    <span className="text-xs font-normal text-muted-foreground">
+                      pts sobre a média
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {a.chanceMando != null
+                      ? `${fmtPct(a.chanceMando)} de chance de pontuar acima da própria média ${a.proximo.mando === "C" ? "em casa" : "fora"}`
+                      : "Sem histórico suficiente"}{" "}
+                    (média em casa {fmt(a.stats.mediaCasa)} em {a.stats.jogosCasa} jogos, fora{" "}
+                    {fmt(a.stats.mediaFora)} em {a.stats.jogosFora}).
+                  </p>
+                </div>
+                <div className="rounded-md border px-3 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Nível do adversário
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                    {nomeClube(clubes, a.proximo.adversario)}
+                    {a.proximo.posicaoTabelaAdversario != null && (
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {a.proximo.posicaoTabelaAdversario}º na tabela
+                      </span>
+                    )}
+                    <NivelBadge nivel={a.nivelAdversario} />
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {a.nivelAdversario
+                      ? `Ajuste de ${a.ajusteNivel >= 0 ? "+" : "−"}${fmt(Math.abs(a.ajusteNivel), 2)} pts na projeção.`
+                      : "A API não informou a posição do adversário na tabela."}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {a.stats.historico.length > 0 && (
               <div>

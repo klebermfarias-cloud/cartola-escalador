@@ -16,6 +16,7 @@ import {
   STATUS_NOMES,
   type Clubes,
 } from "./format";
+import { AjusteMando, NivelBadge, ORDEM_NIVEL } from "./Indicadores";
 
 type Col = {
   key: string;
@@ -82,6 +83,21 @@ export function PlayersTable({
         title: "% das rodadas do clube em que jogou",
         get: (a) => a.stats.participacao,
         render: (a) => fmtPct(a.stats.participacao),
+      },
+      {
+        key: "mando",
+        label: "Casa/fora",
+        title:
+          "Fator casa/fora: pontos a mais ou a menos que a média do jogador, pelo mando do jogo",
+        get: (a) => (a.proximo ? a.ajusteMando : null),
+        render: (a) => <AjusteMando a={a} />,
+      },
+      {
+        key: "nivel",
+        label: "Nível adv.",
+        title: "Faixa do adversário na tabela: muito difícil (1º-5º) a muito fácil (16º-20º)",
+        get: (a) => (a.nivelAdversario ? ORDEM_NIVEL[a.nivelAdversario] : null),
+        render: (a) => <NivelBadge nivel={a.nivelAdversario} />,
       },
       {
         key: "cedidas",
@@ -173,7 +189,7 @@ export function PlayersTable({
       </div>
 
       <div className="max-h-[70vh] overflow-auto rounded-md border">
-        <table className="w-full min-w-[960px] text-xs">
+        <table className="w-full min-w-[1120px] text-xs">
           <thead className="sticky top-0 z-10 bg-muted">
             <tr>
               <th className="px-2 py-1.5 text-left font-medium">Jogador</th>

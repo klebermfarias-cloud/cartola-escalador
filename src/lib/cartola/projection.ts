@@ -1,10 +1,17 @@
-import { calcularEstatisticas, estatisticasVazias, shrink, type ResumoHistorico } from "./stats";
+import {
+  calcularEstatisticas,
+  estatisticasVazias,
+  nivelAdversario,
+  shrink,
+  type ResumoHistorico,
+} from "./stats";
 import {
   STATUS,
   type ApiMercado,
   type ApiPartidas,
   type Atleta,
   type AtletaProjetado,
+  type NivelAdversario,
   type PosicaoId,
   type ProximoJogo,
 } from "./types";
@@ -18,8 +25,10 @@ export interface ModeloConfig {
   pesoForma: number;
   pesoMediana: number;
   pesoBasica: number;
-  /** Intensidade do ajuste pelo adversário (0 = ignora, 1 = total). */
+  /** Intensidade do ajuste pelo que o adversário cede à posição (0 a 100). */
   pesoAdversario: number;
+  /** Intensidade do ajuste pela faixa do adversário na tabela (0 a 100). */
+  pesoNivel: number;
   perfil: PerfilRisco;
   /** Nº mínimo de jogos para o atleta ser escalável. */
   minJogos: number;
@@ -34,7 +43,8 @@ export const MODELO_PADRAO: ModeloConfig = {
   pesoForma: 25,
   pesoMediana: 10,
   pesoBasica: 10,
-  pesoAdversario: 50,
+  pesoAdversario: 40,
+  pesoNivel: 40,
   perfil: "equilibrado",
   minJogos: 3,
   incluirDuvida: false,
@@ -47,6 +57,20 @@ export const LAMBDA_RISCO: Record<PerfilRisco, number> = {
   equilibrado: 0,
   arrojado: -0.25,
 };
+
+/**
+ * Efeito de partida (pts em relação à média da posição) usado enquanto há poucos jogos
+ * contra cada faixa de adversário. Com o histórico, o efeito real da temporada prevalece.
+ */
+export const EFEITO_NIVEL_INICIAL: Record<NivelAdversario, number> = {
+  "muito-dificil": -0.6,
+  dificil: -0.2,
+  facil: 0.2,
+  "muito-facil": 0.6,
+};
+
+/** Peso (em aparições) do efeito inicial de cada faixa frente ao histórico. */
+const K_NIVEL = 30;
 
 /** Fator aplicado à projeção de atletas em dúvida. */
 export const FATOR_DUVIDA = 0.75;
@@ -156,6 +180,7 @@ export function projetarAtletas(
   };
   const somaPesos = pesos.media + pesos.mando + pesos.forma + pesos.mediana + pesos.basica || 1;
   const alpha = Math.max(0, Math.min(1, cfg.pesoAdversario / 100));
+  const beta = Math.max(0, Math.min(1, (cfg.pesoNivel ?? 0) / 100));
   const lambda = LAMBDA_RISCO[cfg.perfil];
 
   // Média por posição — do histórico ou, sem histórico, da média oficial do mercado.
@@ -168,17 +193,37 @@ export function projetarAtletas(
     mediaPos.set(pos, xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
   }
 
+  // Efeito do mando por posição na liga: média jogando em casa/fora menos a média da posição.
+  const efeitoMando = (pos: number, mando: "C" | "F") => {
+    const x = resumo.porPosicaoMando.get(`${pos}:${mando}`);
+    return x && x.n > 0 ? x.soma / x.n - (mediaPos.get(pos) ?? 0) : 0;
+  };
+  // Efeito da faixa do adversário por posição, regularizado pelo efeito inicial.
+  const efeitoNivel = (pos: number, nivel: NivelAdversario) => {
+    const x = resumo.porPosicaoNivel.get(`${pos}:${nivel}`);
+    const inicial = EFEITO_NIVEL_INICIAL[nivel];
+    if (!x || x.n === 0) return inicial;
+    return shrink(x.soma / x.n - (mediaPos.get(pos) ?? 0), x.n, inicial, K_NIVEL);
+  };
+
   return atletas.map((a) => {
     const s = a.stats;
     const prior = mediaPos.get(a.posicaoId) ?? 0;
     const k = cfg.k;
+    const mando = a.proximo?.mando ?? null;
 
     const mGeral = shrink(s.media, s.jogos, prior, k);
     const mediaMando =
       a.proximo?.mando === "C" ? s.mediaCasa : a.proximo?.mando === "F" ? s.mediaFora : null;
     const nMando =
       a.proximo?.mando === "C" ? s.jogosCasa : a.proximo?.mando === "F" ? s.jogosFora : 0;
-    const mMando = shrink(mediaMando, nMando, mGeral, k);
+    // Fator casa/fora: a média do atleta no mando do jogo, puxada para a média geral dele
+    // somada ao efeito do mando na posição (vantagem de jogar em casa na liga).
+    const efMando = mando ? efeitoMando(a.posicaoId, mando) : 0;
+    const mMando = shrink(mediaMando, nMando, mGeral + efMando, k);
+    const pctAcima = mando === "C" ? s.pctAcimaCasa : mando === "F" ? s.pctAcimaFora : null;
+    const chanceInicial = Math.min(0.65, Math.max(0.35, 0.5 + efMando * 0.08));
+    const chanceMando = mando ? shrink(pctAcima, nMando, chanceInicial, k + 1) : null;
     const mForma = shrink(s.mediaUltimas, s.jogosUltimas, mGeral, k);
     const mMediana = shrink(s.mediana, s.jogos, prior, k);
     // A básica é o "piso" do atleta; somamos a contribuição média de G/A da posição
@@ -202,7 +247,11 @@ export function projetarAtletas(
       if (cedidas != null) ajuste = alpha * (cedidas - prior);
     }
 
-    let projecao = base + ajuste;
+    // Faixa do adversário pela tabela: muito difícil, difícil, fácil, muito fácil.
+    const nivel = nivelAdversario(a.proximo?.posicaoTabelaAdversario);
+    const ajusteNivel = nivel ? beta * efeitoNivel(a.posicaoId, nivel) : 0;
+
+    let projecao = base + ajuste + ajusteNivel;
     if (a.statusId === STATUS.DUVIDA) projecao *= FATOR_DUVIDA;
     // Quem entra em poucas partidas do clube tende a ser reserva: risco de não jogar.
     if (s.jogos > 0 && s.historico.length > 0) projecao *= fatorParticipacao(s.participacao);
@@ -222,6 +271,10 @@ export function projetarAtletas(
       score,
       cedidasAdversario: cedidas,
       ajusteAdversario: ajuste,
+      ajusteMando: mando ? mMando - mGeral : 0,
+      chanceMando,
+      nivelAdversario: nivel,
+      ajusteNivel,
       elegivel: !motivo,
       motivoInelegivel: motivo,
     };

@@ -3,6 +3,7 @@ import type { Banco } from "@/lib/cartola/optimizer";
 import type { AtletaProjetado } from "@/lib/cartola/types";
 import { POSICOES } from "@/lib/cartola/types";
 import { cn } from "@/lib/utils";
+import { NivelPonto } from "./Indicadores";
 import { COR_POSICAO, escudo, fmt, fmtEscalacoes, siglaClube, type Clubes } from "./format";
 
 /** Quem ocupa a vaga: o titular sugerido, a 2ª opção ou o mais escalado da posição. */
@@ -252,6 +253,7 @@ function PlayerSpot({
                 <Plane className="h-2.5 w-2.5" />
               )}
               {siglaClube(clubes, prox.adversario)}
+              <NivelPonto a={a} />
             </span>
           )}
         </span>
