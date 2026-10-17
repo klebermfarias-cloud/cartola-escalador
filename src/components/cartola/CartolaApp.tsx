@@ -32,26 +32,59 @@ import { SettingsPanel } from "./SettingsPanel";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { emCampo, SoccerField, type Escolha, type OpcaoCampo, type Slot } from "./SoccerField";
 
-const PREFS_KEY = "cartola:prefs:v1";
+const PREFS_KEY = "cartola:prefs:v2";
+/** Versão anterior, em que as cartoletas tinham C$ 100 como padrão. */
+const PREFS_KEY_V1 = "cartola:prefs:v1";
+
+export type ModoOrcamento = "ideal" | "proprio";
 
 interface Prefs {
-  orcamento: number;
+  /** "ideal": time com as maiores pontuações, sem limite; "proprio": limitado às cartoletas. */
+  modoOrcamento: ModoOrcamento;
+  minhasCartoletas: number;
   formacao: string;
   cfg: ModeloConfig;
 }
 
-const PREFS_PADRAO: Prefs = { orcamento: 100, formacao: "auto", cfg: MODELO_PADRAO };
+const PREFS_PADRAO: Prefs = {
+  modoOrcamento: "ideal",
+  minhasCartoletas: 100,
+  formacao: "auto",
+  cfg: MODELO_PADRAO,
+};
 
 function lerPrefs(): Prefs {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return PREFS_PADRAO;
-    const p = JSON.parse(raw) as Partial<Prefs>;
-    return {
-      orcamento: typeof p.orcamento === "number" ? p.orcamento : PREFS_PADRAO.orcamento,
-      formacao: typeof p.formacao === "string" ? p.formacao : PREFS_PADRAO.formacao,
-      cfg: { ...MODELO_PADRAO, ...(p.cfg ?? {}) },
-    };
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<Prefs>;
+      return {
+        modoOrcamento: p.modoOrcamento === "proprio" ? "proprio" : "ideal",
+        minhasCartoletas:
+          typeof p.minhasCartoletas === "number"
+            ? p.minhasCartoletas
+            : PREFS_PADRAO.minhasCartoletas,
+        formacao: typeof p.formacao === "string" ? p.formacao : PREFS_PADRAO.formacao,
+        cfg: { ...MODELO_PADRAO, ...(p.cfg ?? {}) },
+      };
+    }
+    // Aproveita formação, pesos e cartoletas da versão anterior, começando no time ideal.
+    const antigo = localStorage.getItem(PREFS_KEY_V1);
+    if (antigo) {
+      const p = JSON.parse(antigo) as {
+        orcamento?: unknown;
+        formacao?: unknown;
+        cfg?: Partial<ModeloConfig>;
+      };
+      return {
+        ...PREFS_PADRAO,
+        minhasCartoletas:
+          typeof p.orcamento === "number" ? p.orcamento : PREFS_PADRAO.minhasCartoletas,
+        formacao: typeof p.formacao === "string" ? p.formacao : PREFS_PADRAO.formacao,
+        cfg: { ...MODELO_PADRAO, ...(p.cfg ?? {}) },
+      };
+    }
+    return PREFS_PADRAO;
   } catch {
     return PREFS_PADRAO;
   }
@@ -212,11 +245,19 @@ function Escalador({ dados }: { dados: DadosCartola }) {
     [atletasBase, resumo, prefs.cfg],
   );
 
-  const orcamentoValido = Number.isFinite(prefs.orcamento) && prefs.orcamento > 0;
-  const escalacao = useMemo(
-    () => (orcamentoValido ? escalar(projetados, prefs.formacao, prefs.orcamento) : null),
-    [projetados, prefs.formacao, prefs.orcamento, orcamentoValido],
+  // Time ideal: as maiores pontuações prováveis, sem limite de cartoletas.
+  const ideal = useMemo(
+    () => escalar(projetados, prefs.formacao, Number.POSITIVE_INFINITY),
+    [projetados, prefs.formacao],
   );
+  const custoIdeal = ideal?.custo ?? null;
+  const proprio = prefs.modoOrcamento === "proprio";
+  const cartoletas = prefs.minhasCartoletas;
+  const orcamentoValido = !proprio || (Number.isFinite(cartoletas) && cartoletas > 0);
+  const escalacao = useMemo(() => {
+    if (!proprio) return ideal;
+    return orcamentoValido ? escalar(projetados, prefs.formacao, cartoletas) : null;
+  }, [proprio, ideal, orcamentoValido, projetados, prefs.formacao, cartoletas]);
 
   useEffect(() => setEscolhas({}), [escalacao]);
 
@@ -257,7 +298,7 @@ function Escalador({ dados }: { dados: DadosCartola }) {
   const capitao = useMemo(() => escolherCapitao(timeAtual), [timeAtual]);
   const custoAtual = timeAtual.reduce((s, a) => s + a.preco, 0);
   const projAtual = projecaoTime(timeAtual, capitao?.id ?? null);
-  const saldo = prefs.orcamento - custoAtual;
+  const saldo = proprio ? cartoletas - custoAtual : null;
   const escaladosIds = useMemo(
     () => new Set([...timeAtual, ...banco.reservas].map((a) => a.id)),
     [timeAtual, banco],
@@ -308,8 +349,11 @@ function Escalador({ dados }: { dados: DadosCartola }) {
               </CardHeader>
               <CardContent>
                 <SettingsPanel
-                  orcamento={prefs.orcamento}
-                  onOrcamento={(v) => setPrefs((p) => ({ ...p, orcamento: v }))}
+                  modo={prefs.modoOrcamento}
+                  onModo={(modoOrcamento) => setPrefs((p) => ({ ...p, modoOrcamento }))}
+                  cartoletas={cartoletas}
+                  onCartoletas={(v) => setPrefs((p) => ({ ...p, minhasCartoletas: v }))}
+                  custoIdeal={custoIdeal}
                   formacao={prefs.formacao}
                   onFormacao={(v) => setPrefs((p) => ({ ...p, formacao: v }))}
                   cfg={prefs.cfg}
@@ -324,7 +368,10 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                   <ResumoTime
                     formacao={escalacao.formacao}
                     custo={custoAtual}
+                    cartoletas={proprio ? cartoletas : null}
                     saldo={saldo}
+                    custoIdeal={custoIdeal}
+                    projecaoIdeal={ideal?.projecao ?? null}
                     projecao={projAtual}
                     capitao={capitao}
                   />
@@ -451,9 +498,10 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                 )}
                 {escalacao && (
                   <p className="pt-2 text-[11px] leading-snug text-muted-foreground">
-                    A 2ª opção é o melhor jogador da posição fora do time que ainda cabe nas
-                    cartoletas se for trocado sozinho. O mais escalado é o jogador da posição que
-                    mais cartoleiros escalaram na rodada, sem considerar o preço. O capitão (×
+                    A 2ª opção é o melhor jogador da posição fora do time (com “Minhas cartoletas”,
+                    o melhor que ainda cabe no valor se for trocado sozinho). O mais escalado é o
+                    jogador da posição que mais cartoleiros escalaram na rodada, sem considerar o
+                    preço. O capitão (×
                     {CAPITAO_MULT}) e o banco são recalculados a cada troca. Cada reserva custa no
                     máximo o mesmo que o titular mais barato da posição.
                   </p>
@@ -537,40 +585,110 @@ function ComoFunciona() {
 function ResumoTime({
   formacao,
   custo,
+  cartoletas,
   saldo,
+  custoIdeal,
+  projecaoIdeal,
   projecao,
   capitao,
 }: {
   formacao: string;
   custo: number;
-  saldo: number;
+  /** null no modo ideal (sem limite de cartoletas). */
+  cartoletas: number | null;
+  saldo: number | null;
+  custoIdeal: number | null;
+  projecaoIdeal: number | null;
   projecao: number;
   capitao: AtletaProjetado | null;
 }) {
   const item = "flex min-w-0 flex-col rounded-md border bg-card px-3 py-1.5";
   const rotulo = "text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
   const valor = "font-display text-lg font-bold tabular-nums";
+  const estourou = saldo != null && saldo < -1e-6;
+  const usado = cartoletas ? Math.min(100, (custo / cartoletas) * 100) : 100;
+  const faltaParaIdeal = cartoletas != null && custoIdeal != null ? custoIdeal - cartoletas : null;
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-      <div className={item}>
-        <span className={rotulo}>Formação</span>
-        <span className={valor}>{formacao}</span>
+    <div className="space-y-2">
+      <div className="rounded-md border bg-card px-3 py-2">
+        {cartoletas == null ? (
+          <>
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className={rotulo}>Valor do time ideal</span>
+              <span className="font-display text-2xl font-bold tabular-nums text-[var(--gramado)]">
+                C$ {fmt(custo, 2)}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Time com as maiores pontuações prováveis, sem limite de cartoletas. Para montar com o
+              que você tem, escolha “Minhas cartoletas” na configuração.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className={rotulo}>Custo do time</span>
+                <span
+                  className={cn(
+                    "font-display text-2xl font-bold tabular-nums",
+                    estourou && "text-destructive",
+                  )}
+                >
+                  C$ {fmt(custo, 2)}
+                </span>
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  de C$ {fmt(cartoletas, 2)}
+                </span>
+              </div>
+              <span
+                className={cn(
+                  "text-sm font-semibold tabular-nums",
+                  estourou ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {estourou ? "Faltam" : "Sobram"} C$ {fmt(Math.abs(saldo ?? 0), 2)}
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn(
+                  "h-full rounded-full",
+                  estourou ? "bg-destructive" : "bg-[var(--gramado)]",
+                )}
+                style={{ width: `${usado}%` }}
+              />
+            </div>
+            {custoIdeal != null && projecaoIdeal != null && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {faltaParaIdeal != null && faltaParaIdeal > 0.005 ? (
+                  <>
+                    O time ideal custa <strong>C$ {fmt(custoIdeal, 2)}</strong> (C${" "}
+                    {fmt(faltaParaIdeal, 2)} a mais) e projeta {fmt(projecaoIdeal)} pts,{" "}
+                    {fmt(Math.max(0, projecaoIdeal - projecao))} a mais que este.
+                  </>
+                ) : (
+                  <>Suas cartoletas já pagam o time ideal (C$ {fmt(custoIdeal, 2)}).</>
+                )}
+              </p>
+            )}
+          </>
+        )}
       </div>
-      <div className={item}>
-        <span className={rotulo}>Custo</span>
-        <span className={valor}>C$ {fmt(custo, 2)}</span>
-      </div>
-      <div className={item}>
-        <span className={rotulo}>Saldo</span>
-        <span className={cn(valor, saldo < -1e-6 && "text-destructive")}>C$ {fmt(saldo, 2)}</span>
-      </div>
-      <div className={item}>
-        <span className={rotulo}>Projeção</span>
-        <span className={valor}>{fmt(projecao)} pts</span>
-      </div>
-      <div className={cn(item, "col-span-2 sm:col-span-1")}>
-        <span className={rotulo}>Capitão</span>
-        <span className={cn(valor, "truncate")}>{capitao?.apelido ?? "–"}</span>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className={item}>
+          <span className={rotulo}>Formação</span>
+          <span className={valor}>{formacao}</span>
+        </div>
+        <div className={item}>
+          <span className={rotulo}>Projeção</span>
+          <span className={valor}>{fmt(projecao)} pts</span>
+        </div>
+        <div className={cn(item, "col-span-2 sm:col-span-1")}>
+          <span className={rotulo}>Capitão</span>
+          <span className={cn(valor, "truncate")}>{capitao?.apelido ?? "–"}</span>
+        </div>
       </div>
     </div>
   );

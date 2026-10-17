@@ -13,11 +13,16 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { FORMACOES } from "@/lib/cartola/optimizer";
+import { fmt } from "./format";
 import { MODELO_PADRAO, type ModeloConfig, type PerfilRisco } from "@/lib/cartola/projection";
 
 interface Props {
-  orcamento: number;
-  onOrcamento: (v: number) => void;
+  modo: "ideal" | "proprio";
+  onModo: (modo: "ideal" | "proprio") => void;
+  cartoletas: number;
+  onCartoletas: (v: number) => void;
+  /** Custo do time ideal (maiores pontuações, sem limite de cartoletas). */
+  custoIdeal: number | null;
   formacao: string;
   onFormacao: (v: string) => void;
   cfg: ModeloConfig;
@@ -54,27 +59,68 @@ const PESOS: { key: keyof ModeloConfig; label: string; hint: string }[] = [
   },
 ];
 
-export function SettingsPanel({ orcamento, onOrcamento, formacao, onFormacao, cfg, onCfg }: Props) {
+export function SettingsPanel({
+  modo,
+  onModo,
+  cartoletas,
+  onCartoletas,
+  custoIdeal,
+  formacao,
+  onFormacao,
+  cfg,
+  onCfg,
+}: Props) {
   const set = <K extends keyof ModeloConfig>(k: K, v: ModeloConfig[K]) => onCfg({ ...cfg, [k]: v });
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label htmlFor="orcamento" className="text-xs">
-            Cartoletas (C$)
-          </Label>
-          <Input
-            id="orcamento"
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step={0.01}
-            value={Number.isFinite(orcamento) ? orcamento : ""}
-            onChange={(e) => onOrcamento(parseFloat(e.target.value.replace(",", ".")))}
-            className="h-8"
-          />
-        </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Cartoletas</Label>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={modo}
+          onValueChange={(v) => v && onModo(v as "ideal" | "proprio")}
+          className="grid grid-cols-2"
+        >
+          <ToggleGroupItem value="ideal" className="text-xs">
+            Time ideal
+          </ToggleGroupItem>
+          <ToggleGroupItem value="proprio" className="text-xs">
+            Minhas cartoletas
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {modo === "ideal" ? (
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Sem limite: escolhe as maiores pontuações prováveis
+            {custoIdeal != null && (
+              <>
+                {" "}
+                e custa <strong className="text-foreground">C$ {fmt(custoIdeal, 2)}</strong>
+              </>
+            )}
+            .
+          </p>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">C$</span>
+            <Input
+              id="orcamento"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={0.01}
+              value={Number.isFinite(cartoletas) ? cartoletas : ""}
+              onChange={(e) => onCartoletas(parseFloat(e.target.value.replace(",", ".")))}
+              className="h-8"
+              aria-label="Minhas cartoletas"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Formação</Label>
           <Select value={formacao} onValueChange={onFormacao}>
