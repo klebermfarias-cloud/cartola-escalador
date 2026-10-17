@@ -4,6 +4,8 @@ on:
   schedule:
     # A cada 2 horas (UTC)
     - cron: "17 */2 * * *"
+    # Logo antes da republicação agendada da página (8h47 e 13h47 de Brasília)
+    - cron: "30 11,16 * * *"
   workflow_dispatch:
 
 permissions:

@@ -15,6 +15,10 @@ com uma 2ª opção por posição e o banco de reservas (incluindo o reserva de 
 3. **Página** (`src/`): React + Tailwind. Lê `data.json`, calcula as estatísticas e otimiza o time
    no próprio navegador, então mudar cartoletas, formação ou pesos é instantâneo.
 
+4. **Republicação**: uma rotina agendada do Claude republica a página no claude.ai todo dia às
+   8h47 e às 13h47 (horário de Brasília), com os dados mais recentes do repositório. A página
+   mostra no topo de quando são os dados e destaca quando têm mais de 12 horas.
+
 ## Estatísticas usadas
 
 Média geral, desvio padrão, mediana, média em casa e fora, média das últimas 5 rodadas em que

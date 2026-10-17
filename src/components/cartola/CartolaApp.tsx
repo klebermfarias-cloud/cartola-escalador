@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeftRight, Loader2, RefreshCw, Star } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Clock, Loader2, Star } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,15 +83,19 @@ function fechamentoTexto(f?: {
   return dataHora(new Date(f.ano, f.mes - 1, f.dia, f.hora, f.minuto));
 }
 
+/** Acima disso os dados são destacados como desatualizados. */
+const HORAS_DADOS_ANTIGOS = 12;
+
+function tempoDecorrido(desde: Date): string {
+  const min = Math.max(0, Math.round((Date.now() - desde.getTime()) / 60_000));
+  if (min < 60) return `há ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 48) return `há ${h} h`;
+  return `há ${Math.round(h / 24)} dias`;
+}
+
 export function CartolaApp() {
   const { estado, recarregar } = useDados();
-  const [recarregando, setRecarregando] = useState(false);
-
-  const onRecarregar = async () => {
-    setRecarregando(true);
-    await recarregar();
-    setRecarregando(false);
-  };
 
   return (
     <div className="min-h-full bg-background">
@@ -101,16 +105,7 @@ export function CartolaApp() {
             Escalador <span className="text-[var(--gramado)]">Cartola</span>
           </h1>
           {estado.tipo === "ok" && <StatusMercado dados={estado.dados} />}
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto h-7 gap-1 text-xs"
-            onClick={onRecarregar}
-            disabled={recarregando}
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", recarregando && "animate-spin")} />
-            Recarregar
-          </Button>
+          {estado.tipo === "ok" && <IdadeDados atualizadoEm={estado.dados.atualizadoEm} />}
         </div>
       </header>
 
@@ -126,7 +121,7 @@ export function CartolaApp() {
             <AlertTitle>Não foi possível carregar os dados</AlertTitle>
             <AlertDescription className="flex flex-wrap items-center gap-2">
               {estado.mensagem}
-              <Button size="sm" variant="outline" className="h-7" onClick={onRecarregar}>
+              <Button size="sm" variant="outline" className="h-7" onClick={() => void recarregar()}>
                 Tentar de novo
               </Button>
             </AlertDescription>
@@ -158,10 +153,26 @@ function StatusMercado({ dados }: { dados: DadosCartola }) {
       {aberto && fechamentoTexto(s.fechamento) && (
         <span className="text-muted-foreground">fecha {fechamentoTexto(s.fechamento)}</span>
       )}
-      <span className="text-muted-foreground">
-        · dados de {dataHora(new Date(dados.atualizadoEm))}
-      </span>
     </div>
+  );
+}
+
+function IdadeDados({ atualizadoEm }: { atualizadoEm: string }) {
+  const quando = new Date(atualizadoEm);
+  const antigo = Date.now() - quando.getTime() > HORAS_DADOS_ANTIGOS * 3_600_000;
+  return (
+    <span
+      className={cn(
+        "ml-auto flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs tabular-nums",
+        antigo
+          ? "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+          : "text-muted-foreground",
+      )}
+      title="A página é atualizada automaticamente todo dia às 8h47 e às 13h47 (horário de Brasília)."
+    >
+      <Clock className="h-3 w-3" />
+      Dados de {dataHora(quando)} · {tempoDecorrido(quando)}
+    </span>
   );
 }
 
