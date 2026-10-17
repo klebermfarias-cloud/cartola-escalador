@@ -287,7 +287,7 @@ function BotaoTroca({
         title={`${outro.apelido} é o mais escalado da posição (${fmtEscalacoes(outro.escalacoes)} escalações)`}
       >
         <Users className="h-2.5 w-2.5 shrink-0" />
-        <span className="truncate">mais escalado</span>
+        <span className="truncate">{fmtEscalacoes(outro.escalacoes)}</span>
       </span>
     );
   }

@@ -357,7 +357,7 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                   />
                   <p className="text-center text-xs text-muted-foreground">
                     Toque no jogador para ver as estatísticas e no botão embaixo dele para trocar
-                    pela {opcao === "popular" ? "jogador mais escalado" : "2ª opção"} da posição.
+                    {opcao === "popular" ? "pelo mais escalado" : "pela 2ª opção"} da posição.
                   </p>
                 </>
               ) : (
