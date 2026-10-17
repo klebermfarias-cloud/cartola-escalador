@@ -105,6 +105,12 @@ export function PlayersTable({
     ],
     [],
   );
+  // A coluna de escalações só aparece quando a coleta trouxe os mais escalados.
+  const temEscalacoes = useMemo(() => atletas.some((a) => a.escalacoes != null), [atletas]);
+  const colsVisiveis = useMemo(
+    () => (temEscalacoes ? cols : cols.filter((c) => c.key !== "escalacoes")),
+    [cols, temEscalacoes],
+  );
 
   const linhas = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -173,7 +179,7 @@ export function PlayersTable({
               <th className="px-2 py-1.5 text-left font-medium">Jogador</th>
               <th className="px-2 py-1.5 text-left font-medium">Pos</th>
               <th className="px-2 py-1.5 text-left font-medium">Jogo</th>
-              {cols.map((c) => (
+              {colsVisiveis.map((c) => (
                 <th
                   key={c.key}
                   title={c.title}
@@ -232,7 +238,7 @@ export function PlayersTable({
                     ? `${a.proximo.mando === "C" ? "vs" : "@"} ${siglaClube(clubes, a.proximo.adversario)}`
                     : "–"}
                 </td>
-                {cols.map((c) => {
+                {colsVisiveis.map((c) => {
                   const v = c.get(a);
                   return (
                     <td key={c.key} className="px-2 py-1 text-right tabular-nums">

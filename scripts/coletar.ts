@@ -35,14 +35,18 @@ const HEADERS = {
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function obter(url: string, tentativas = 4): Promise<Response> {
+async function obter(
+  url: string,
+  tentativas = 4,
+  extras: Record<string, string> = {},
+): Promise<Response> {
   let ultimoErro: unknown;
   for (let i = 0; i < tentativas; i++) {
     try {
-      const res = await fetch(url, { headers: HEADERS });
+      const res = await fetch(url, { headers: { ...HEADERS, ...extras } });
       if (res.ok) return res;
       ultimoErro = new Error(`HTTP ${res.status} em ${url}`);
-      if (res.status === 404) break;
+      if ([401, 403, 404].includes(res.status)) break;
     } catch (e) {
       ultimoErro = e;
     }
@@ -117,23 +121,22 @@ async function main() {
   const mercado = await json<ApiMercado>("atletas/mercado");
   const partidas = await json<ApiPartidas>(`partidas/${rodadaAtual}`);
 
-  // Mais escalados da rodada: opcional, a página funciona sem eles.
+  // Mais escalados da rodada: o endpoint exige login na conta Globo (token Bearer).
+  // Sem CARTOLA_TOKEN a coleta segue sem eles e a página esconde essa opção.
   let maisEscalados: MaisEscalado[] = [];
-  try {
-    const brutos = await json<unknown>("mercado/destaques");
-    maisEscalados = normalizarDestaques(brutos);
-    const posicoes: Record<number, number> = {};
-    const porId = new Map(mercado.atletas.map((a) => [a.atleta_id, a.posicao_id]));
-    for (const m of maisEscalados) {
-      const pos = porId.get(m.atleta_id) ?? 0;
-      posicoes[pos] = (posicoes[pos] ?? 0) + 1;
+  const token = process.env.CARTOLA_TOKEN?.trim();
+  if (!token) {
+    console.log("Mais escalados: CARTOLA_TOKEN não definido, pulando.");
+  } else {
+    try {
+      const res = await obter(`${API}/auth/mercado/destaques`, 1, {
+        authorization: `Bearer ${token}`,
+      });
+      maisEscalados = normalizarDestaques(await res.json());
+      console.log(`Mais escalados: ${maisEscalados.length} atletas.`);
+    } catch (e) {
+      console.warn("Mais escalados indisponíveis:", (e as Error).message);
     }
-    console.log(`${maisEscalados.length} mais escalados; por posição:`, JSON.stringify(posicoes));
-    if (Array.isArray(brutos) && brutos.length > 0) {
-      console.log("Exemplo de destaque:", JSON.stringify(brutos[0]).slice(0, 600));
-    }
-  } catch (e) {
-    console.warn("Mais escalados indisponíveis:", (e as Error).message);
   }
   console.log(
     `${mercado.atletas.length} atletas no mercado, ${partidas.partidas.length} partidas na rodada`,
