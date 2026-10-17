@@ -339,3 +339,43 @@ export function escolherBanco(
 
   return { reservas, luxoId: luxo?.id ?? null };
 }
+
+// ---------------------------------------------------------------------------
+// Mais escalados
+
+/**
+ * Atribui a cada vaga do time o mais escalado da mesma posição. Um titular que já está
+ * entre os mais escalados fica com a própria vaga; as demais vagas recebem, em ordem, os
+ * mais escalados restantes da posição.
+ */
+export function atribuirMaisEscalados(
+  titulares: AtletaProjetado[],
+  atletas: AtletaProjetado[],
+  maisEscaladosIds: number[],
+): Record<number, AtletaProjetado | null> {
+  const porId = new Map(atletas.map((a) => [a.id, a]));
+  const ranking = maisEscaladosIds
+    .map((id) => porId.get(id))
+    .filter((a): a is AtletaProjetado => !!a);
+  const out: Record<number, AtletaProjetado | null> = {};
+
+  for (const pos of new Set(titulares.map((t) => t.posicaoId))) {
+    const vagas = titulares.filter((t) => t.posicaoId === pos).sort((a, b) => b.score - a.score);
+    const populares = ranking.filter((a) => a.posicaoId === pos);
+    const usados = new Set<number>();
+    for (const t of vagas) {
+      if (populares.some((p) => p.id === t.id)) {
+        out[t.id] = t;
+        usados.add(t.id);
+      }
+    }
+    const restantes = populares.filter(
+      (p) => !usados.has(p.id) && !vagas.some((t) => t.id === p.id),
+    );
+    for (const t of vagas) {
+      if (out[t.id]) continue;
+      out[t.id] = restantes.shift() ?? null;
+    }
+  }
+  return out;
+}

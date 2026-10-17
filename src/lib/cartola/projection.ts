@@ -90,6 +90,7 @@ export function montarAtletas(
   mercado: ApiMercado,
   resumo: ResumoHistorico,
   partidasRodada: ApiPartidas | null | undefined,
+  escalacoes?: Map<number, number>,
 ): Atleta[] {
   const proximos = proximosJogos(partidasRodada);
   return (mercado.atletas ?? []).map((a) => {
@@ -118,6 +119,7 @@ export function montarAtletas(
       mediaOficial: a.media_num,
       jogosOficial: a.jogos_num,
       scoutTotal: a.scout ?? {},
+      escalacoes: escalacoes?.get(a.atleta_id) ?? null,
       stats,
       proximo: proximos.get(a.clube_id) ?? null,
     };

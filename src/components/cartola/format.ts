@@ -7,6 +7,14 @@ export function fmt(n: number | null | undefined, casas = 1): string {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
 }
 
+/** 1234567 -> "1,2 mi"; 45300 -> "45 mil". */
+export function fmtEscalacoes(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "–";
+  if (n >= 1_000_000) return `${fmt(n / 1_000_000, 1)} mi`;
+  if (n >= 1_000) return `${Math.round(n / 1_000).toLocaleString("pt-BR")} mil`;
+  return String(n);
+}
+
 export function fmtPct(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "–";
   return `${Math.round(n * 100)}%`;

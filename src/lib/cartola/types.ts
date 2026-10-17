@@ -187,6 +187,8 @@ export interface Atleta {
   mediaOficial: number;
   jogosOficial: number;
   scoutTotal: Record<string, number>;
+  /** Quantos times escalaram o atleta na rodada, quando ele está entre os mais escalados. */
+  escalacoes?: number | null;
   stats: EstatisticasAtleta;
   proximo: ProximoJogo | null;
 }

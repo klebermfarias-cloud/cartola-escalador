@@ -19,7 +19,16 @@ import {
 } from "@/components/ui/dialog";
 import type { AtletaProjetado } from "@/lib/cartola/types";
 import { POSICOES } from "@/lib/cartola/types";
-import { escudo, fmt, fmtPct, nomeClube, siglaClube, STATUS_NOMES, type Clubes } from "./format";
+import {
+  escudo,
+  fmt,
+  fmtEscalacoes,
+  fmtPct,
+  nomeClube,
+  siglaClube,
+  STATUS_NOMES,
+  type Clubes,
+} from "./format";
 
 const SCOUT_NOMES: Record<string, string> = {
   G: "Gols",
@@ -137,6 +146,13 @@ export function PlayerDetailDialog({
                 label="Mín. p/ valorizar"
                 value={a.minimoValorizar != null ? fmt(a.minimoValorizar) : "–"}
               />
+              {a.escalacoes != null && (
+                <Stat
+                  label="Escalações"
+                  value={fmtEscalacoes(a.escalacoes)}
+                  hint="Quantos times escalaram o jogador nesta rodada"
+                />
+              )}
               <Stat label="Média geral" value={fmt(a.stats.media, 2)} />
               <Stat label="Mediana" value={fmt(a.stats.mediana, 2)} />
               <Stat

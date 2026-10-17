@@ -7,7 +7,15 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { AtletaProjetado } from "@/lib/cartola/types";
 import { POSICOES } from "@/lib/cartola/types";
 import { cn } from "@/lib/utils";
-import { escudo, fmt, fmtPct, siglaClube, STATUS_NOMES, type Clubes } from "./format";
+import {
+  escudo,
+  fmt,
+  fmtEscalacoes,
+  fmtPct,
+  siglaClube,
+  STATUS_NOMES,
+  type Clubes,
+} from "./format";
 
 type Col = {
   key: string;
@@ -80,6 +88,13 @@ export function PlayersTable({
         label: "Ced. adv.",
         title: "Média que o adversário cede para a posição",
         get: (a) => a.cedidasAdversario,
+      },
+      {
+        key: "escalacoes",
+        label: "Escal.",
+        title: "Escalações na rodada (só para os mais escalados)",
+        get: (a) => a.escalacoes ?? null,
+        render: (a) => fmtEscalacoes(a.escalacoes),
       },
       {
         key: "minimo",

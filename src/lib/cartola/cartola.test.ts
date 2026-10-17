@@ -232,3 +232,18 @@ describe("mais escalados", () => {
     expect(normalizarDestaques({ erro: true })).toEqual([]);
   });
 });
+
+describe("atribuição dos mais escalados", () => {
+  it("mantém o titular que já é mais escalado e distribui os demais pela posição", async () => {
+    const { atribuirMaisEscalados } = await import("./optimizer");
+    const t1 = fakeAtleta(1, 5, 9, 10);
+    const t2 = fakeAtleta(2, 5, 8, 10);
+    const t3 = fakeAtleta(3, 1, 5, 5);
+    const p1 = fakeAtleta(10, 5, 4, 12);
+    const p2 = fakeAtleta(11, 4, 4, 12);
+    const r = atribuirMaisEscalados([t1, t2, t3], [t1, t2, t3, p1, p2], [10, 2, 11, 999]);
+    expect(r[2]?.id).toBe(2); // titular já é mais escalado
+    expect(r[1]?.id).toBe(10);
+    expect(r[3]).toBeNull(); // nenhum goleiro entre os mais escalados
+  });
+});

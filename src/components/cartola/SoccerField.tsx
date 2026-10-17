@@ -1,33 +1,48 @@
-import { ArrowLeftRight, Home, Plane, Star } from "lucide-react";
+import { ArrowLeftRight, Home, Plane, Star, Users } from "lucide-react";
 import type { Banco } from "@/lib/cartola/optimizer";
 import type { AtletaProjetado } from "@/lib/cartola/types";
 import { POSICOES } from "@/lib/cartola/types";
 import { cn } from "@/lib/utils";
-import { COR_POSICAO, escudo, fmt, siglaClube, type Clubes } from "./format";
+import { COR_POSICAO, escudo, fmt, fmtEscalacoes, siglaClube, type Clubes } from "./format";
+
+/** Quem ocupa a vaga: o titular sugerido, a 2ª opção ou o mais escalado da posição. */
+export type Escolha = "titular" | "alternativa" | "popular";
+/** Qual opção aparece no botão de troca embaixo de cada jogador. */
+export type OpcaoCampo = Exclude<Escolha, "titular">;
 
 export interface Slot {
   titular: AtletaProjetado;
   alternativa: AtletaProjetado | null;
-  trocado: boolean;
+  /** Mais escalado da posição atribuído a esta vaga (pode ser o próprio titular). */
+  popular: AtletaProjetado | null;
+  escolha: Escolha;
+}
+
+export function emCampo(s: Slot): AtletaProjetado {
+  if (s.escolha === "alternativa" && s.alternativa) return s.alternativa;
+  if (s.escolha === "popular" && s.popular) return s.popular;
+  return s.titular;
 }
 
 interface Props {
   slots: Slot[];
+  opcao: OpcaoCampo;
   capitaoId: number | null;
   banco: Banco;
   clubes: Clubes;
-  onToggle: (titularId: number) => void;
+  onEscolher: (titularId: number, escolha: Escolha) => void;
   onSelect: (a: AtletaProjetado) => void;
 }
 
-function emCampo(s: Slot) {
-  return s.trocado && s.alternativa ? s.alternativa : s.titular;
-}
-function noBanco(s: Slot) {
-  return s.trocado && s.alternativa ? s.titular : s.alternativa;
-}
-
-export function SoccerField({ slots, capitaoId, banco, clubes, onToggle, onSelect }: Props) {
+export function SoccerField({
+  slots,
+  opcao,
+  capitaoId,
+  banco,
+  clubes,
+  onEscolher,
+  onSelect,
+}: Props) {
   const porPos = (pos: number) => slots.filter((s) => s.titular.posicaoId === pos);
   const laterais = porPos(2);
   const defesa = [...laterais.slice(0, 1), ...porPos(3), ...laterais.slice(1)];
@@ -51,9 +66,10 @@ export function SoccerField({ slots, capitaoId, banco, clubes, onToggle, onSelec
                 <PlayerSpot
                   key={s.titular.id}
                   slot={s}
+                  opcao={opcao}
                   capitaoId={capitaoId}
                   clubes={clubes}
-                  onToggle={onToggle}
+                  onEscolher={onEscolher}
                   onSelect={onSelect}
                 />
               ))}
@@ -70,9 +86,10 @@ export function SoccerField({ slots, capitaoId, banco, clubes, onToggle, onSelec
             <PlayerSpot
               key={s.titular.id}
               slot={s}
+              opcao={opcao}
               capitaoId={capitaoId}
               clubes={clubes}
-              onToggle={onToggle}
+              onEscolher={onEscolher}
               onSelect={onSelect}
               claro
               largo
@@ -161,23 +178,24 @@ function Avatar({ a, clubes }: { a: AtletaProjetado; clubes: Clubes }) {
 
 function PlayerSpot({
   slot,
+  opcao,
   capitaoId,
   clubes,
-  onToggle,
+  onEscolher,
   onSelect,
   claro,
   largo,
 }: {
   slot: Slot;
+  opcao: OpcaoCampo;
   capitaoId: number | null;
   clubes: Clubes;
-  onToggle: (id: number) => void;
+  onEscolher: (titularId: number, escolha: Escolha) => void;
   onSelect: (a: AtletaProjetado) => void;
   claro?: boolean;
   largo?: boolean;
 }) {
   const a = emCampo(slot);
-  const alt = noBanco(slot);
   const prox = a.proximo;
   return (
     <div
@@ -238,26 +256,70 @@ function PlayerSpot({
           )}
         </span>
       </button>
-      {alt && (
-        <button
-          type="button"
-          onClick={() => onToggle(slot.titular.id)}
-          className={cn(
-            "mt-0.5 flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] leading-3 shadow-sm transition-colors",
-            slot.trocado
-              ? "border-yellow-300 bg-yellow-300 text-yellow-950 hover:bg-yellow-200"
-              : "border-white/40 bg-black/35 text-white hover:bg-black/55",
-            claro && !slot.trocado && "border-border bg-muted text-foreground hover:bg-accent",
-          )}
-          title={`Alternar para ${alt.apelido} (${fmt(alt.projecao)} pts, C$ ${fmt(alt.preco)})`}
-        >
-          <ArrowLeftRight className="h-2.5 w-2.5 shrink-0" />
-          <span className="truncate">
-            {alt.apelido} {fmt(alt.projecao)}
-          </span>
-        </button>
-      )}
+      <BotaoTroca slot={slot} opcao={opcao} claro={claro} onEscolher={onEscolher} />
     </div>
+  );
+}
+
+function BotaoTroca({
+  slot,
+  opcao,
+  claro,
+  onEscolher,
+}: {
+  slot: Slot;
+  opcao: OpcaoCampo;
+  claro?: boolean;
+  onEscolher: (titularId: number, escolha: Escolha) => void;
+}) {
+  const outro = opcao === "popular" ? slot.popular : slot.alternativa;
+  if (!outro) return null;
+  const Icone = opcao === "popular" ? Users : ArrowLeftRight;
+
+  // O próprio titular já é o mais escalado: não há troca, só a indicação.
+  if (outro.id === slot.titular.id) {
+    return (
+      <span
+        className={cn(
+          "mt-0.5 flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] leading-3",
+          claro ? "border-border text-muted-foreground" : "border-white/40 text-white/90",
+        )}
+        title={`${outro.apelido} é o mais escalado da posição (${fmtEscalacoes(outro.escalacoes)} escalações)`}
+      >
+        <Users className="h-2.5 w-2.5 shrink-0" />
+        <span className="truncate">mais escalado</span>
+      </span>
+    );
+  }
+
+  const ativo = slot.escolha === opcao;
+  const mostrado = ativo ? slot.titular : outro;
+  const valor =
+    !ativo && opcao === "popular" ? fmtEscalacoes(outro.escalacoes) : fmt(mostrado.projecao);
+  return (
+    <button
+      type="button"
+      onClick={() => onEscolher(slot.titular.id, ativo ? "titular" : opcao)}
+      className={cn(
+        "mt-0.5 flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] leading-3 shadow-sm transition-colors",
+        ativo
+          ? "border-yellow-300 bg-yellow-300 text-yellow-950 hover:bg-yellow-200"
+          : "border-white/40 bg-black/35 text-white hover:bg-black/55",
+        claro && !ativo && "border-border bg-muted text-foreground hover:bg-accent",
+      )}
+      title={
+        ativo
+          ? `Voltar para ${slot.titular.apelido}`
+          : opcao === "popular"
+            ? `Trocar pelo mais escalado: ${outro.apelido} (${fmtEscalacoes(outro.escalacoes)} escalações, ${fmt(outro.projecao)} pts, C$ ${fmt(outro.preco)})`
+            : `Trocar pela 2ª opção: ${outro.apelido} (${fmt(outro.projecao)} pts, C$ ${fmt(outro.preco)})`
+      }
+    >
+      <Icone className="h-2.5 w-2.5 shrink-0" />
+      <span className="truncate">
+        {mostrado.apelido} {valor}
+      </span>
+    </button>
   );
 }
 

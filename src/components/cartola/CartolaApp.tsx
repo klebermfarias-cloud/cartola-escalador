@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeftRight, Clock, Loader2, Star } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Clock, Loader2, Star, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDados } from "@/hooks/useDados";
 import { mercadoDe, type DadosCartola } from "@/lib/cartola/dados";
 import {
+  atribuirMaisEscalados,
   CAPITAO_MULT,
   escalar,
   escolherBanco,
@@ -23,11 +24,12 @@ import { resumirHistorico } from "@/lib/cartola/stats";
 import type { AtletaProjetado } from "@/lib/cartola/types";
 import { POSICOES } from "@/lib/cartola/types";
 import { cn } from "@/lib/utils";
-import { fmt, STATUS_MERCADO } from "./format";
+import { fmt, fmtEscalacoes, STATUS_MERCADO } from "./format";
 import { PlayerDetailDialog } from "./PlayerDetailDialog";
 import { PlayersTable } from "./PlayersTable";
 import { SettingsPanel } from "./SettingsPanel";
-import { SoccerField, type Slot } from "./SoccerField";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { emCampo, SoccerField, type Escolha, type OpcaoCampo, type Slot } from "./SoccerField";
 
 const PREFS_KEY = "cartola:prefs:v1";
 
@@ -178,7 +180,8 @@ function IdadeDados({ atualizadoEm }: { atualizadoEm: string }) {
 
 function Escalador({ dados }: { dados: DadosCartola }) {
   const [prefs, setPrefsState] = useState<Prefs>(PREFS_PADRAO);
-  const [trocados, setTrocados] = useState<Set<number>>(new Set());
+  const [escolhas, setEscolhas] = useState<Record<number, Escolha>>({});
+  const [opcao, setOpcao] = useState<OpcaoCampo>("alternativa");
   const [detalhe, setDetalhe] = useState<AtletaProjetado | null>(null);
 
   useEffect(() => setPrefsState(lerPrefs()), []);
@@ -191,9 +194,17 @@ function Escalador({ dados }: { dados: DadosCartola }) {
 
   const clubes = dados.clubes;
   const resumo = useMemo(() => resumirHistorico(dados.rodadas), [dados.rodadas]);
+  const maisEscalados = useMemo(() => dados.maisEscalados ?? [], [dados.maisEscalados]);
+  const temMaisEscalados = maisEscalados.length > 0;
   const atletasBase = useMemo(
-    () => montarAtletas(mercadoDe(dados), resumo, dados.partidas),
-    [dados, resumo],
+    () =>
+      montarAtletas(
+        mercadoDe(dados),
+        resumo,
+        dados.partidas,
+        new Map(maisEscalados.map((m) => [m.atleta_id, m.escalacoes])),
+      ),
+    [dados, resumo, maisEscalados],
   );
   const projetados = useMemo(
     () => projetarAtletas(atletasBase, resumo, prefs.cfg),
@@ -206,30 +217,40 @@ function Escalador({ dados }: { dados: DadosCartola }) {
     [projetados, prefs.formacao, prefs.orcamento, orcamentoValido],
   );
 
-  useEffect(() => setTrocados(new Set()), [escalacao]);
+  useEffect(() => setEscolhas({}), [escalacao]);
+
+  const populares = useMemo(
+    () =>
+      atribuirMaisEscalados(
+        escalacao?.titulares ?? [],
+        projetados,
+        maisEscalados.map((m) => m.atleta_id),
+      ),
+    [escalacao, projetados, maisEscalados],
+  );
 
   const slots: Slot[] = useMemo(
     () =>
       (escalacao?.titulares ?? []).map((t) => ({
         titular: t,
         alternativa: escalacao?.alternativas[t.id] ?? null,
-        trocado: trocados.has(t.id),
+        popular: populares[t.id] ?? null,
+        escolha: escolhas[t.id] ?? "titular",
       })),
-    [escalacao, trocados],
+    [escalacao, populares, escolhas],
   );
 
-  const timeAtual = useMemo(
-    () => slots.map((s) => (s.trocado && s.alternativa ? s.alternativa : s.titular)),
-    [slots],
-  );
-  // O banco não repete quem aparece como 2ª opção no campo.
+  const timeAtual = useMemo(() => slots.map(emCampo), [slots]);
+  // O banco não repete quem está no campo nem quem aparece como opção de troca.
   const banco = useMemo(() => {
-    const foraDeCampo = new Set(
+    const emCampoIds = new Set(timeAtual.map((a) => a.id));
+    const opcoes = new Set(
       slots
-        .map((s) => (s.trocado ? s.titular.id : s.alternativa?.id))
-        .filter((x): x is number => x != null),
+        .flatMap((s) => [s.titular, s.alternativa, s.popular])
+        .filter((a): a is AtletaProjetado => !!a && !emCampoIds.has(a.id))
+        .map((a) => a.id),
     );
-    return escolherBanco(projetados, timeAtual, foraDeCampo);
+    return escolherBanco(projetados, timeAtual, opcoes);
   }, [projetados, timeAtual, slots]);
 
   const capitao = useMemo(() => escolherCapitao(timeAtual), [timeAtual]);
@@ -241,13 +262,12 @@ function Escalador({ dados }: { dados: DadosCartola }) {
     [timeAtual, banco],
   );
 
-  const toggle = (id: number) =>
-    setTrocados((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
+  const escolher = (titularId: number, escolha: Escolha) =>
+    setEscolhas((e) => ({ ...e, [titularId]: escolha }));
+  const escolherTodos = (escolha: Escolha) =>
+    setEscolhas(Object.fromEntries(slots.map((s) => [s.titular.id, escolha])));
+  const todosEm = (escolha: Escolha) =>
+    slots.length > 0 && slots.every((s) => s.escolha === escolha);
 
   const status = dados.status;
 
@@ -307,18 +327,37 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                     projecao={projAtual}
                     capitao={capitao}
                   />
+                  {temMaisEscalados && (
+                    <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+                      <span className="text-muted-foreground">Botão de troca no campo:</span>
+                      <ToggleGroup
+                        type="single"
+                        variant="outline"
+                        size="sm"
+                        value={opcao}
+                        onValueChange={(v) => v && setOpcao(v as OpcaoCampo)}
+                      >
+                        <ToggleGroupItem value="alternativa" className="h-7 gap-1 px-2 text-xs">
+                          <ArrowLeftRight className="h-3 w-3" /> 2ª opção
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="popular" className="h-7 gap-1 px-2 text-xs">
+                          <Users className="h-3 w-3" /> Mais escalado
+                        </ToggleGroupItem>
+                      </ToggleGroup>
+                    </div>
+                  )}
                   <SoccerField
                     slots={slots}
+                    opcao={opcao}
                     capitaoId={capitao?.id ?? null}
                     banco={banco}
                     clubes={clubes}
-                    onToggle={toggle}
+                    onEscolher={escolher}
                     onSelect={setDetalhe}
                   />
                   <p className="text-center text-xs text-muted-foreground">
-                    Toque no jogador para ver as estatísticas e no botão{" "}
-                    <ArrowLeftRight className="inline h-3 w-3" /> para alternar pela 2ª opção da
-                    posição.
+                    Toque no jogador para ver as estatísticas e no botão embaixo dele para trocar
+                    pela {opcao === "popular" ? "jogador mais escalado" : "2ª opção"} da posição.
                   </p>
                 </>
               ) : (
@@ -334,43 +373,55 @@ function Escalador({ dados }: { dados: DadosCartola }) {
 
             <Card className="order-3">
               <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm">Titular × 2ª opção</CardTitle>
+                <CardTitle className="text-sm">Opções por posição</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 p-3 pt-0">
                 {escalacao && (
-                  <div className="flex gap-1">
+                  <div className="flex flex-wrap gap-1 pb-2">
+                    <span className="mr-1 self-center text-[11px] text-muted-foreground">
+                      Time todo:
+                    </span>
                     <Button
                       size="sm"
-                      variant={trocados.size === 0 ? "default" : "outline"}
+                      variant={todosEm("titular") ? "default" : "outline"}
                       className="h-6 px-2 text-[11px]"
-                      onClick={() => setTrocados(new Set())}
+                      onClick={() => escolherTodos("titular")}
                     >
                       Titulares
                     </Button>
                     <Button
                       size="sm"
-                      variant={
-                        trocados.size === slots.length && slots.length > 0 ? "default" : "outline"
-                      }
-                      className="h-6 px-2 text-[11px]"
-                      onClick={() =>
-                        setTrocados(
-                          new Set(slots.filter((s) => s.alternativa).map((s) => s.titular.id)),
-                        )
-                      }
+                      variant={todosEm("alternativa") ? "default" : "outline"}
+                      className="h-6 gap-1 px-2 text-[11px]"
+                      onClick={() => escolherTodos("alternativa")}
                     >
-                      Todas 2ª opção
+                      <ArrowLeftRight className="h-3 w-3" /> 2ª opção
                     </Button>
+                    {temMaisEscalados && (
+                      <Button
+                        size="sm"
+                        variant={todosEm("popular") ? "default" : "outline"}
+                        className="h-6 gap-1 px-2 text-[11px]"
+                        onClick={() => escolherTodos("popular")}
+                      >
+                        <Users className="h-3 w-3" /> Mais escalados
+                      </Button>
+                    )}
                   </div>
                 )}
-              </CardHeader>
-              <CardContent className="space-y-1 p-3 pt-0">
                 {slots.map((s) => (
                   <AlternativaRow
                     key={s.titular.id}
                     slot={s}
-                    onToggle={() => toggle(s.titular.id)}
+                    onEscolher={(e) => escolher(s.titular.id, e)}
                     onSelect={setDetalhe}
                   />
                 ))}
+                {escalacao && !temMaisEscalados && (
+                  <p className="pt-2 text-[11px] leading-snug text-muted-foreground">
+                    Os mais escalados da rodada não vieram na última coleta da API do Cartola.
+                  </p>
+                )}
                 {banco.reservas.length > 0 && (
                   <div className="pt-3">
                     <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -404,9 +455,10 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                 {escalacao && (
                   <p className="pt-2 text-[11px] leading-snug text-muted-foreground">
                     A 2ª opção é o melhor jogador da posição fora do time que ainda cabe nas
-                    cartoletas se for trocado sozinho. O capitão (×{CAPITAO_MULT}) e o banco são
-                    recalculados a cada troca. Cada reserva custa no máximo o mesmo que o titular
-                    mais barato da posição.
+                    cartoletas se for trocado sozinho. O mais escalado é o jogador da posição que
+                    mais cartoleiros escalaram na rodada, sem considerar o preço. O capitão (×
+                    {CAPITAO_MULT}) e o banco são recalculados a cada troca. Cada reserva custa no
+                    máximo o mesmo que o titular mais barato da posição.
                   </p>
                 )}
               </CardContent>
@@ -518,15 +570,16 @@ function ResumoTime({
 
 function AlternativaRow({
   slot,
-  onToggle,
+  onEscolher,
   onSelect,
 }: {
   slot: Slot;
-  onToggle: () => void;
+  onEscolher: (escolha: Escolha) => void;
   onSelect: (a: AtletaProjetado) => void;
 }) {
   const t = slot.titular;
   const alt = slot.alternativa;
+  const pop = slot.popular;
   const nome = (a: AtletaProjetado, ativo: boolean) => (
     <button
       type="button"
@@ -542,27 +595,56 @@ function AlternativaRow({
       </div>
     </button>
   );
+  const trocar = (escolha: Escolha) => onEscolher(slot.escolha === escolha ? "titular" : escolha);
   return (
-    <div className="flex items-center gap-1 border-b py-0.5 last:border-b-0">
-      <span className="w-8 shrink-0 text-[10px] font-semibold text-muted-foreground">
-        {POSICOES[t.posicaoId].curto}
-      </span>
-      {nome(t, !slot.trocado)}
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-6 w-6 shrink-0"
-        onClick={onToggle}
-        disabled={!alt}
-        title="Alternar"
-        aria-label={`Alternar ${t.apelido}`}
-      >
-        <ArrowLeftRight className="h-3.5 w-3.5" />
-      </Button>
-      {alt ? (
-        nome(alt, slot.trocado)
-      ) : (
-        <span className="flex-1 text-xs text-muted-foreground">sem opção</span>
+    <div className="border-b py-0.5 last:border-b-0">
+      <div className="flex items-center gap-1">
+        <span className="w-8 shrink-0 text-[10px] font-semibold text-muted-foreground">
+          {POSICOES[t.posicaoId].curto}
+        </span>
+        {nome(t, slot.escolha === "titular")}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 shrink-0"
+          onClick={() => trocar("alternativa")}
+          disabled={!alt}
+          title="Alternar com a 2ª opção"
+          aria-label={`Alternar ${t.apelido} com a 2ª opção`}
+        >
+          <ArrowLeftRight className="h-3.5 w-3.5" />
+        </Button>
+        {alt ? (
+          nome(alt, slot.escolha === "alternativa")
+        ) : (
+          <span className="flex-1 text-xs text-muted-foreground">sem opção</span>
+        )}
+      </div>
+      {pop && (
+        <div className="flex items-center gap-1 pl-9 text-[10px] text-muted-foreground">
+          <Users className="h-3 w-3 shrink-0" />
+          {pop.id === t.id ? (
+            <span className="truncate">
+              É o mais escalado da posição ({fmtEscalacoes(pop.escalacoes)})
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => trocar("popular")}
+              className={cn(
+                "min-w-0 truncate rounded px-1 text-left hover:bg-accent hover:text-foreground",
+                slot.escolha === "popular" &&
+                  "bg-[var(--gramado-suave)] text-foreground ring-1 ring-[var(--gramado)]",
+              )}
+              title={
+                slot.escolha === "popular" ? `Voltar para ${t.apelido}` : `Usar ${pop.apelido}`
+              }
+            >
+              Mais escalado: <span className="font-medium">{pop.apelido}</span> ·{" "}
+              {fmtEscalacoes(pop.escalacoes)} · {fmt(pop.projecao)} pts · C$ {fmt(pop.preco)}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
