@@ -213,3 +213,22 @@ describe("banco de reservas", () => {
     expect(ganhoEsperado(-5, 0)).toBe(0);
   });
 });
+
+describe("mais escalados", () => {
+  it("normaliza destaques com o atleta aninhado ou na raiz", async () => {
+    const { normalizarDestaques } = await import("./dados");
+    expect(
+      normalizarDestaques([
+        { Atleta: { atleta_id: 1, apelido: "A" }, escalacoes: 100 },
+        { atleta_id: 2, escalacoes: 300 },
+        { Atleta: { atleta_id: 1 }, escalacoes: 50 },
+        { escalacoes: 10 },
+        null,
+      ]),
+    ).toEqual([
+      { atleta_id: 2, escalacoes: 300 },
+      { atleta_id: 1, escalacoes: 100 },
+    ]);
+    expect(normalizarDestaques({ erro: true })).toEqual([]);
+  });
+});

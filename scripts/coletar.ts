@@ -14,7 +14,11 @@ import type {
   ApiPontuados,
   RodadaHistorica,
 } from "../src/lib/cartola/types";
-import type { DadosCartola } from "../src/lib/cartola/dados";
+import {
+  normalizarDestaques,
+  type DadosCartola,
+  type MaisEscalado,
+} from "../src/lib/cartola/dados";
 
 const API = "https://api.cartola.globo.com";
 const RAIZ = path.resolve(import.meta.dirname, "..");
@@ -112,6 +116,25 @@ async function main() {
 
   const mercado = await json<ApiMercado>("atletas/mercado");
   const partidas = await json<ApiPartidas>(`partidas/${rodadaAtual}`);
+
+  // Mais escalados da rodada: opcional, a página funciona sem eles.
+  let maisEscalados: MaisEscalado[] = [];
+  try {
+    const brutos = await json<unknown>("mercado/destaques");
+    maisEscalados = normalizarDestaques(brutos);
+    const posicoes: Record<number, number> = {};
+    const porId = new Map(mercado.atletas.map((a) => [a.atleta_id, a.posicao_id]));
+    for (const m of maisEscalados) {
+      const pos = porId.get(m.atleta_id) ?? 0;
+      posicoes[pos] = (posicoes[pos] ?? 0) + 1;
+    }
+    console.log(`${maisEscalados.length} mais escalados; por posição:`, JSON.stringify(posicoes));
+    if (Array.isArray(brutos) && brutos.length > 0) {
+      console.log("Exemplo de destaque:", JSON.stringify(brutos[0]).slice(0, 600));
+    }
+  } catch (e) {
+    console.warn("Mais escalados indisponíveis:", (e as Error).message);
+  }
   console.log(
     `${mercado.atletas.length} atletas no mercado, ${partidas.partidas.length} partidas na rodada`,
   );
@@ -164,6 +187,7 @@ async function main() {
     partidas: { rodada: rodadaAtual, partidas: partidas.partidas },
     rodadas,
     rodadasIndisponiveis: falhas,
+    maisEscalados,
   };
   // Só regrava (e gera commit) quando algo além do horário mudou.
   const anterior = lerJson<DadosCartola>(ARQ_SAIDA);
