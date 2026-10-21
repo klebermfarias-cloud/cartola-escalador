@@ -27,6 +27,8 @@ export interface Escalacao {
   titulares: AtletaProjetado[];
   /** id do titular -> alternativa sugerida para a mesma vaga */
   alternativas: Record<number, AtletaProjetado | null>;
+  /** id do titular -> 3ª opção (distinta do time e das 2ªs opções) */
+  alternativas2: Record<number, AtletaProjetado | null>;
   custo: number;
   projecao: number;
   score: number;
@@ -216,8 +218,10 @@ export function sugerirAlternativas(
   atletas: AtletaProjetado[],
   titulares: AtletaProjetado[],
   orcamento: number,
+  /** Jogadores que não podem ser sugeridos (ex.: as 2ªs opções, ao montar as 3ªs). */
+  excluir: Iterable<number> = [],
 ): Record<number, AtletaProjetado | null> {
-  const usados = new Set(titulares.map((a) => a.id));
+  const usados = new Set([...titulares.map((a) => a.id), ...excluir]);
   const custo = custoDe(titulares);
   const out: Record<number, AtletaProjetado | null> = {};
   const porPos = new Map<number, AtletaProjetado[]>();
@@ -261,10 +265,19 @@ export function escalar(
 
   const titulares = ordenarTime(melhor.time);
   const capitao = escolherCapitao(titulares);
+  const alternativas = sugerirAlternativas(atletas, titulares, orcamento);
   return {
     formacao: melhor.f.nome,
     titulares,
-    alternativas: sugerirAlternativas(atletas, titulares, orcamento),
+    alternativas,
+    alternativas2: sugerirAlternativas(
+      atletas,
+      titulares,
+      orcamento,
+      Object.values(alternativas)
+        .filter((a): a is AtletaProjetado => !!a)
+        .map((a) => a.id),
+    ),
     custo: custoDe(titulares),
     projecao: projecaoTime(titulares, capitao?.id ?? null),
     score: scoreDe(titulares),

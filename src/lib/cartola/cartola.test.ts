@@ -135,6 +135,14 @@ describe("otimizador", () => {
     expect(new Set(alts).size).toBe(alts.length);
     for (const a of alts) expect(ids.has(a)).toBe(false);
     for (const t of e.titulares) expect(e.alternativas[t.id]?.posicaoId).toBe(t.posicaoId);
+    // 3ª opção: mesma posição, fora do time e diferente de todas as 2ªs opções
+    const alts2 = Object.values(e.alternativas2).filter(Boolean).map((a) => a!.id);
+    expect(new Set(alts2).size).toBe(alts2.length);
+    for (const a of alts2) {
+      expect(ids.has(a)).toBe(false);
+      expect(alts.includes(a)).toBe(false);
+    }
+    for (const t of e.titulares) expect(e.alternativas2[t.id]?.posicaoId).toBe(t.posicaoId);
     expect(e.capitaoId).not.toBeNull();
   });
 

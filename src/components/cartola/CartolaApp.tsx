@@ -5,6 +5,7 @@ import {
   Clock,
   Lightbulb,
   Loader2,
+  Shuffle,
   Star,
   Users,
 } from "lucide-react";
@@ -303,6 +304,7 @@ function Escalador({ dados }: { dados: DadosCartola }) {
       (escalacao?.titulares ?? []).map((t) => ({
         titular: t,
         alternativa: escalacao?.alternativas[t.id] ?? null,
+        alternativa2: escalacao?.alternativas2[t.id] ?? null,
         popular: populares[t.id] ?? null,
         escolha: escolhas[t.id] ?? "titular",
       })),
@@ -315,7 +317,7 @@ function Escalador({ dados }: { dados: DadosCartola }) {
     const emCampoIds = new Set(timeAtual.map((a) => a.id));
     const opcoes = new Set(
       slots
-        .flatMap((s) => [s.titular, s.alternativa, s.popular])
+        .flatMap((s) => [s.titular, s.alternativa, s.alternativa2, s.popular])
         .filter((a): a is AtletaProjetado => !!a && !emCampoIds.has(a.id))
         .map((a) => a.id),
     );
@@ -413,25 +415,28 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                     projecao={projAtual}
                     capitao={capitao}
                   />
-                  {temMaisEscalados && (
-                    <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
-                      <span className="text-muted-foreground">Botão de troca no campo:</span>
-                      <ToggleGroup
-                        type="single"
-                        variant="outline"
-                        size="sm"
-                        value={opcao}
-                        onValueChange={(v) => v && setOpcao(v as OpcaoCampo)}
-                      >
-                        <ToggleGroupItem value="alternativa" className="h-7 gap-1 px-2 text-xs">
-                          <ArrowLeftRight className="h-3 w-3" /> 2ª opção
-                        </ToggleGroupItem>
+                  <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Botão de troca no campo:</span>
+                    <ToggleGroup
+                      type="single"
+                      variant="outline"
+                      size="sm"
+                      value={opcao}
+                      onValueChange={(v) => v && setOpcao(v as OpcaoCampo)}
+                    >
+                      <ToggleGroupItem value="alternativa" className="h-7 gap-1 px-2 text-xs">
+                        <ArrowLeftRight className="h-3 w-3" /> 2ª opção
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="alternativa2" className="h-7 gap-1 px-2 text-xs">
+                        <Shuffle className="h-3 w-3" /> 3ª opção
+                      </ToggleGroupItem>
+                      {temMaisEscalados && (
                         <ToggleGroupItem value="popular" className="h-7 gap-1 px-2 text-xs">
                           <Users className="h-3 w-3" /> Mais escalado
                         </ToggleGroupItem>
-                      </ToggleGroup>
-                    </div>
-                  )}
+                      )}
+                    </ToggleGroup>
+                  </div>
                   <SoccerField
                     slots={slots}
                     opcao={opcao}
@@ -443,7 +448,12 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                   />
                   <p className="text-center text-xs text-muted-foreground">
                     Toque no jogador para ver as estatísticas e no botão embaixo dele para trocar{" "}
-                    {opcao === "popular" ? "pelo mais escalado" : "pela 2ª opção"} da posição.
+                    {opcao === "popular"
+                      ? "pelo mais escalado"
+                      : opcao === "alternativa2"
+                        ? "pela 3ª opção"
+                        : "pela 2ª opção"}{" "}
+                    da posição.
                   </p>
                   <LegendaNivel />
                 </>
@@ -483,6 +493,14 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                       onClick={() => escolherTodos("alternativa")}
                     >
                       <ArrowLeftRight className="h-3 w-3" /> 2ª opção
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={todosEm("alternativa2") ? "default" : "outline"}
+                      className="h-6 gap-1 px-2 text-[11px]"
+                      onClick={() => escolherTodos("alternativa2")}
+                    >
+                      <Shuffle className="h-3 w-3" /> 3ª opção
                     </Button>
                     {temMaisEscalados && (
                       <Button
@@ -536,10 +554,10 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                 )}
                 {escalacao && (
                   <p className="pt-2 text-[11px] leading-snug text-muted-foreground">
-                    A 2ª opção é o melhor jogador da posição fora do time (com “Minhas cartoletas”,
-                    o melhor que ainda cabe no valor se for trocado sozinho). O mais escalado é o
-                    jogador da posição que mais cartoleiros escalaram na rodada, sem considerar o
-                    preço. O capitão (×
+                    A 2ª opção é o melhor jogador da posição fora do time, e a 3ª, o melhor depois
+                    dela (com “Minhas cartoletas”, o melhor que ainda cabe no valor se for trocado
+                    sozinho). O mais escalado é o jogador da posição que mais cartoleiros escalaram
+                    na rodada, sem considerar o preço. O capitão (×
                     {CAPITAO_MULT}) e o banco são recalculados a cada troca. Cada reserva custa no
                     máximo o mesmo que o titular mais barato da posição.
                   </p>
@@ -772,6 +790,7 @@ function AlternativaRow({
 }) {
   const t = slot.titular;
   const alt = slot.alternativa;
+  const alt2 = slot.alternativa2;
   const pop = slot.popular;
   const nome = (a: AtletaProjetado, ativo: boolean) => (
     <button
@@ -813,6 +832,26 @@ function AlternativaRow({
           <span className="flex-1 text-xs text-muted-foreground">sem opção</span>
         )}
       </div>
+      {alt2 && (
+        <div className="flex items-center gap-1 pl-9 text-[10px] text-muted-foreground">
+          <Shuffle className="h-3 w-3 shrink-0" />
+          <button
+            type="button"
+            onClick={() => trocar("alternativa2")}
+            className={cn(
+              "min-w-0 truncate rounded px-1 text-left hover:bg-accent hover:text-foreground",
+              slot.escolha === "alternativa2" &&
+                "bg-[var(--gramado-suave)] text-foreground ring-1 ring-[var(--gramado)]",
+            )}
+            title={
+              slot.escolha === "alternativa2" ? `Voltar para ${t.apelido}` : `Usar ${alt2.apelido}`
+            }
+          >
+            3ª opção: <span className="font-medium">{alt2.apelido}</span> · {fmt(alt2.projecao)} pts
+            · C$ {fmt(alt2.preco)}
+          </button>
+        </div>
+      )}
       {pop && (
         <div className="flex items-center gap-1 pl-9 text-[10px] text-muted-foreground">
           <Users className="h-3 w-3 shrink-0" />

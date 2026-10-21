@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Home, Lightbulb, Plane, Star, Users } from "lucide-react";
+import { ArrowLeftRight, Home, Lightbulb, Plane, Shuffle, Star, Users } from "lucide-react";
 import type { Banco } from "@/lib/cartola/optimizer";
 import type { AtletaProjetado } from "@/lib/cartola/types";
 import { POSICOES } from "@/lib/cartola/types";
@@ -6,14 +6,16 @@ import { cn } from "@/lib/utils";
 import { NivelPonto } from "./Indicadores";
 import { COR_POSICAO, escudo, fmt, fmtEscalacoes, siglaClube, type Clubes } from "./format";
 
-/** Quem ocupa a vaga: o titular sugerido, a 2ª opção ou o mais escalado da posição. */
-export type Escolha = "titular" | "alternativa" | "popular";
+/** Quem ocupa a vaga: o titular sugerido, a 2ª ou 3ª opção, ou o mais escalado da posição. */
+export type Escolha = "titular" | "alternativa" | "alternativa2" | "popular";
 /** Qual opção aparece no botão de troca embaixo de cada jogador. */
 export type OpcaoCampo = Exclude<Escolha, "titular">;
 
 export interface Slot {
   titular: AtletaProjetado;
   alternativa: AtletaProjetado | null;
+  /** 3ª opção da vaga. */
+  alternativa2: AtletaProjetado | null;
   /** Mais escalado da posição atribuído a esta vaga (pode ser o próprio titular). */
   popular: AtletaProjetado | null;
   escolha: Escolha;
@@ -21,6 +23,7 @@ export interface Slot {
 
 export function emCampo(s: Slot): AtletaProjetado {
   if (s.escolha === "alternativa" && s.alternativa) return s.alternativa;
+  if (s.escolha === "alternativa2" && s.alternativa2) return s.alternativa2;
   if (s.escolha === "popular" && s.popular) return s.popular;
   return s.titular;
 }
@@ -280,9 +283,15 @@ function BotaoTroca({
   claro?: boolean;
   onEscolher: (titularId: number, escolha: Escolha) => void;
 }) {
-  const outro = opcao === "popular" ? slot.popular : slot.alternativa;
+  const outro =
+    opcao === "popular"
+      ? slot.popular
+      : opcao === "alternativa2"
+        ? slot.alternativa2
+        : slot.alternativa;
   if (!outro) return null;
-  const Icone = opcao === "popular" ? Users : ArrowLeftRight;
+  const Icone = opcao === "popular" ? Users : opcao === "alternativa2" ? Shuffle : ArrowLeftRight;
+  const nomeOpcao = opcao === "alternativa2" ? "3ª opção" : "2ª opção";
 
   // O próprio titular já é o mais escalado: não há troca, só a indicação.
   if (outro.id === slot.titular.id) {
@@ -320,7 +329,7 @@ function BotaoTroca({
           ? `Voltar para ${slot.titular.apelido}`
           : opcao === "popular"
             ? `Trocar pelo mais escalado: ${outro.apelido} (${fmtEscalacoes(outro.escalacoes)} escalações, ${fmt(outro.projecao)} pts, C$ ${fmt(outro.preco)})`
-            : `Trocar pela 2ª opção: ${outro.apelido} (${fmt(outro.projecao)} pts, C$ ${fmt(outro.preco)})`
+            : `Trocar pela ${nomeOpcao}: ${outro.apelido} (${fmt(outro.projecao)} pts, C$ ${fmt(outro.preco)})`
       }
     >
       <Icone className="h-2.5 w-2.5 shrink-0" />
