@@ -201,6 +201,39 @@ export function PlayerDetailDialog({
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-md border px-3 py-2">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Modelo de gols do jogo
+                  </div>
+                  {a.golsPro != null && a.golsContra != null ? (
+                    <>
+                      <div className="text-sm font-semibold tabular-nums">
+                        {siglaClube(clubes, a.clubeId)} {fmt(a.golsPro)} x {fmt(a.golsContra)}{" "}
+                        {siglaClube(clubes, a.proximo.adversario)}
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Gols esperados de cada lado. Chance de o time não sofrer gol:{" "}
+                        {fmtPct(a.chanceSG)}. Ajuste na projeção: {a.ajusteGols >= 0 ? "+" : "−"}
+                        {fmt(Math.abs(a.ajusteGols), 2)} pts.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Sem histórico de gols suficiente.
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-md border px-3 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Chance de jogar
+                  </div>
+                  <div className="text-sm font-semibold tabular-nums">{fmtPct(a.chanceJogar)}</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Jogou {a.recentes.ultimas5} das últimas {a.recentes.partidas} partidas do clube
+                    {a.recentes.jogouUltima ? ", incluindo a última" : ", mas não a última"}. A
+                    projeção já desconta o risco de não entrar em campo.
+                  </p>
+                </div>
+                <div className="rounded-md border px-3 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Fator casa/fora
                   </div>
                   <div className="flex items-center gap-2 text-sm font-semibold">

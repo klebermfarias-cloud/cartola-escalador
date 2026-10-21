@@ -53,9 +53,16 @@ export function modeloGols(rodadas: RodadaHistorica[]): ModeloGols {
   }
 
   const ultima = rodadas.reduce((m, r) => Math.max(m, r.rodada), 0);
-  // Somas ponderadas por clube e mando: gols marcados e sofridos.
-  type Acum = { pro: number; contra: number; peso: number };
-  const porClube = new Map<string, Acum>();
+  // Cada jogo disputado, do ponto de vista de cada clube, com peso pela idade.
+  type JogoTime = {
+    clube: number;
+    adversario: number;
+    mando: Mando;
+    pro: number;
+    contra: number;
+    w: number;
+  };
+  const jogos: JogoTime[] = [];
   const liga = { C: { gols: 0, peso: 0 }, F: { gols: 0, peso: 0 } };
   for (const r of rodadas) {
     const w = CONFIG_GOLS.decaimento ** (ultima - r.rodada);
@@ -64,12 +71,14 @@ export function modeloGols(rodadas: RodadaHistorica[]): ModeloGols {
       const pro = gols.get(`${r.rodada}:${clube}`);
       const contra = gols.get(`${r.rodada}:${c.adversario}`);
       if (pro == null || contra == null) continue;
-      const k = `${clube}:${c.mando}`;
-      const a = porClube.get(k) ?? { pro: 0, contra: 0, peso: 0 };
-      a.pro += pro * w;
-      a.contra += contra * w;
-      a.peso += w;
-      porClube.set(k, a);
+      jogos.push({
+        clube: Number(clube),
+        adversario: c.adversario,
+        mando: c.mando,
+        pro,
+        contra,
+        w,
+      });
       liga[c.mando].gols += pro * w;
       liga[c.mando].peso += w;
     }
@@ -78,46 +87,40 @@ export function modeloGols(rodadas: RodadaHistorica[]): ModeloGols {
     C: liga.C.peso ? liga.C.gols / liga.C.peso : 1.4,
     F: liga.F.peso ? liga.F.gols / liga.F.peso : 1.0,
   };
+  const outro = (m: Mando): Mando => (m === "C" ? "F" : "C");
 
-  // Força relativa (1 = média da liga), juntando os dois mandos e regularizando.
-  const forca = (clube: number) => {
-    let pro = 0;
-    let contra = 0;
-    let peso = 0;
-    let esperadoPro = 0;
-    let esperadoContra = 0;
-    for (const m of ["C", "F"] as const) {
-      const a = porClube.get(`${clube}:${m}`);
-      if (!a) continue;
-      pro += a.pro;
-      contra += a.contra;
-      peso += a.peso;
-      esperadoPro += a.peso * mediaLiga[m];
-      esperadoContra += a.peso * mediaLiga[m === "C" ? "F" : "C"];
+  // Forças de ataque e defesa (1 = média da liga), ajustadas pela força dos adversários
+  // enfrentados: iteramos até estabilizar. A regularização soma jogos fictícios na média.
+  const ataque = new Map<number, number>();
+  const defesa = new Map<number, number>();
+  const clubes = new Set(jogos.map((j) => j.clube));
+  for (const c of clubes) {
+    ataque.set(c, 1);
+    defesa.set(c, 1);
+  }
+  const k = CONFIG_GOLS.kTime;
+  for (let it = 0; it < 20; it++) {
+    const soma = new Map<number, { gp: number; ep: number; gc: number; ec: number }>();
+    for (const j of jogos) {
+      const s = soma.get(j.clube) ?? { gp: 0, ep: 0, gc: 0, ec: 0 };
+      s.gp += j.w * j.pro;
+      s.ep += j.w * mediaLiga[j.mando] * (defesa.get(j.adversario) ?? 1);
+      s.gc += j.w * j.contra;
+      s.ec += j.w * mediaLiga[outro(j.mando)] * (ataque.get(j.adversario) ?? 1);
+      soma.set(j.clube, s);
     }
     const media = (mediaLiga.C + mediaLiga.F) / 2;
-    return {
-      ataque: (pro + CONFIG_GOLS.kTime * media) / (esperadoPro + CONFIG_GOLS.kTime * media),
-      defesa: (contra + CONFIG_GOLS.kTime * media) / (esperadoContra + CONFIG_GOLS.kTime * media),
-      jogos: peso,
-    };
-  };
-  const cacheForca = new Map<number, ReturnType<typeof forca>>();
-  const forcaDe = (clube: number) => {
-    let f = cacheForca.get(clube);
-    if (!f) {
-      f = forca(clube);
-      cacheForca.set(clube, f);
+    for (const [c, s] of soma) {
+      ataque.set(c, (s.gp + k * media) / (s.ep + k * media));
+      defesa.set(c, (s.gc + k * media) / (s.ec + k * media));
     }
-    return f;
-  };
+  }
 
   const preverJogo = (clube: number, adversario: number, mando: Mando): PrevisaoJogo | null => {
     if (liga.C.peso === 0) return null;
-    const eu = forcaDe(clube);
-    const ele = forcaDe(adversario);
-    const golsPro = mediaLiga[mando] * eu.ataque * ele.defesa;
-    const golsContra = mediaLiga[mando === "C" ? "F" : "C"] * ele.ataque * eu.defesa;
+    const golsPro = mediaLiga[mando] * (ataque.get(clube) ?? 1) * (defesa.get(adversario) ?? 1);
+    const golsContra =
+      mediaLiga[outro(mando)] * (ataque.get(adversario) ?? 1) * (defesa.get(clube) ?? 1);
     return { golsPro, golsContra, chanceSG: Math.exp(-golsContra) };
   };
 

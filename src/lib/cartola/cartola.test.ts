@@ -365,3 +365,40 @@ describe("indicadores de mando e nível do adversário", () => {
     expect(facil.projecao).toBeGreaterThan(dificil.projecao);
   });
 });
+
+describe("modelo de gols", () => {
+  it("dá mais gols ao ataque forte e mais chance de SG contra ataque fraco", async () => {
+    const { modeloGols } = await import("./gols");
+    // Rodízio entre 4 clubes. O clube 1 marca 3 por jogo, o clube 2 não marca, 3 e 4 marcam 1.
+    const golsDe: Record<number, number> = { 1: 3, 2: 0, 3: 1, 4: 1 };
+    const pares = [
+      [1, 2, 3, 4],
+      [1, 3, 2, 4],
+      [1, 4, 2, 3],
+    ];
+    const rodadas = Array.from({ length: 6 }, (_, i) => {
+      const [a, b, c, d] = pares[i % 3];
+      const inv = i >= 3;
+      const atletas = Object.fromEntries(
+        [1, 2, 3, 4].map((cl) => [
+          String(cl * 10 + 1),
+          { pontuacao: 3, posicao_id: 5, clube_id: cl, scout: { G: golsDe[cl] } },
+        ]),
+      );
+      return compactarRodada(
+        i + 1,
+        { atletas },
+        {
+          partidas: [
+            { clube_casa_id: inv ? b : a, clube_visitante_id: inv ? a : b },
+            { clube_casa_id: inv ? d : c, clube_visitante_id: inv ? c : d },
+          ],
+        },
+      );
+    });
+    const m = modeloGols(rodadas);
+    expect(m.preverJogo(1, 3, "C")!.golsPro).toBeGreaterThan(m.preverJogo(2, 3, "C")!.golsPro);
+    // quem enfrenta o clube 2 (que não marca) tem mais chance de SG do que quem enfrenta o 1
+    expect(m.preverJogo(3, 2, "C")!.chanceSG).toBeGreaterThan(m.preverJogo(3, 1, "C")!.chanceSG);
+  });
+});

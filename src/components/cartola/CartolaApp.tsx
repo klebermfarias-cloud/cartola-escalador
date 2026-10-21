@@ -32,8 +32,9 @@ import { SettingsPanel } from "./SettingsPanel";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { emCampo, SoccerField, type Escolha, type OpcaoCampo, type Slot } from "./SoccerField";
 
-const PREFS_KEY = "cartola:prefs:v2";
-/** Versão anterior, em que as cartoletas tinham C$ 100 como padrão. */
+const PREFS_KEY = "cartola:prefs:v3";
+/** Versões anteriores: aproveitamos formação e cartoletas, mas não os pesos (recalibrados). */
+const PREFS_KEY_V2 = "cartola:prefs:v2";
 const PREFS_KEY_V1 = "cartola:prefs:v1";
 
 export type ModoOrcamento = "ideal" | "proprio";
@@ -68,20 +69,28 @@ function lerPrefs(): Prefs {
         cfg: { ...MODELO_PADRAO, ...(p.cfg ?? {}) },
       };
     }
-    // Aproveita formação, pesos e cartoletas da versão anterior, começando no time ideal.
+    // Versões anteriores: mantém formação e cartoletas; os pesos voltam ao padrão novo.
+    const v2 = localStorage.getItem(PREFS_KEY_V2);
+    if (v2) {
+      const p = JSON.parse(v2) as Partial<Prefs>;
+      return {
+        ...PREFS_PADRAO,
+        modoOrcamento: p.modoOrcamento === "proprio" ? "proprio" : "ideal",
+        minhasCartoletas:
+          typeof p.minhasCartoletas === "number"
+            ? p.minhasCartoletas
+            : PREFS_PADRAO.minhasCartoletas,
+        formacao: typeof p.formacao === "string" ? p.formacao : PREFS_PADRAO.formacao,
+      };
+    }
     const antigo = localStorage.getItem(PREFS_KEY_V1);
     if (antigo) {
-      const p = JSON.parse(antigo) as {
-        orcamento?: unknown;
-        formacao?: unknown;
-        cfg?: Partial<ModeloConfig>;
-      };
+      const p = JSON.parse(antigo) as { orcamento?: unknown; formacao?: unknown };
       return {
         ...PREFS_PADRAO,
         minhasCartoletas:
           typeof p.orcamento === "number" ? p.orcamento : PREFS_PADRAO.minhasCartoletas,
         formacao: typeof p.formacao === "string" ? p.formacao : PREFS_PADRAO.formacao,
-        cfg: { ...MODELO_PADRAO, ...(p.cfg ?? {}) },
       };
     }
     return PREFS_PADRAO;
@@ -564,10 +573,24 @@ function ComoFunciona() {
           difícil do 1º ao 5º, difícil do 6º ao 10º, fácil do 11º ao 15º e muito fácil do 16º ao
           20º). O efeito de cada faixa é medido na temporada, por posição, e ajusta a projeção.
         </li>
+        <li>O perfil conservador penaliza o desvio padrão; o arrojado o favorece.</li>
         <li>
-          O perfil conservador penaliza o desvio padrão; o arrojado o favorece. Jogadores em dúvida
-          perdem 25% da projeção, e quem entrou em campo em menos da metade dos jogos do clube perde
-          até 25%.
+          Chance de jogar: medida na temporada pela presença nas últimas 5 partidas do clube (quem
+          jogou as 5 entra em campo em 84% das vezes; quem jogou só 1 e ficou fora da última, em
+          20%). O status “Provável” resolve a maior parte dessa incerteza; jogadores em dúvida
+          perdem mais 25%. A projeção é multiplicada por essa chance.
+        </li>
+        <li>
+          Modelo de gols: o ataque e a defesa de cada clube (gols marcados e sofridos, com mais peso
+          para os jogos recentes) dão os gols esperados de cada lado. Daí saem a chance de não
+          sofrer gol (vale 5 pts para goleiro, lateral e zagueiro), os gols esperados do time (pesam
+          nos gols e assistências) e o saldo esperado (pesa no técnico).
+        </li>
+        <li>
+          Os pesos foram calibrados por backtest: cada rodada passada foi prevista usando só as
+          anteriores e comparada com o resultado real. O modelo de gols e a chance de jogar
+          melhoraram a previsão; com eles, o nível pela tabela e os pontos cedidos quase não
+          acrescentam e ficaram com peso baixo.
         </li>
         <li>
           O time é otimizado para a maior soma de pontos dentro das cartoletas. Na formação

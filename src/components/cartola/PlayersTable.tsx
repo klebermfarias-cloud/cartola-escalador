@@ -85,6 +85,20 @@ export function PlayersTable({
         render: (a) => fmtPct(a.stats.participacao),
       },
       {
+        key: "chanceJogar",
+        label: "Jogar",
+        title: "Chance de entrar em campo (presença recente e status)",
+        get: (a) => a.chanceJogar,
+        render: (a) => fmtPct(a.chanceJogar),
+      },
+      {
+        key: "chanceSG",
+        label: "SG",
+        title: "Chance de o time não sofrer gol, pelo modelo de gols",
+        get: (a) => a.chanceSG,
+        render: (a) => fmtPct(a.chanceSG),
+      },
+      {
         key: "mando",
         label: "Casa/fora",
         title:
@@ -189,7 +203,7 @@ export function PlayersTable({
       </div>
 
       <div className="max-h-[70vh] overflow-auto rounded-md border">
-        <table className="w-full min-w-[1120px] text-xs">
+        <table className="w-full min-w-[1240px] text-xs">
           <thead className="sticky top-0 z-10 bg-muted">
             <tr>
               <th className="px-2 py-1.5 text-left font-medium">Jogador</th>

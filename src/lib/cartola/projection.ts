@@ -52,14 +52,16 @@ export const MODELO_PADRAO: ModeloConfig = {
   pesoForma: 25,
   pesoMediana: 10,
   pesoBasica: 10,
-  pesoAdversario: 40,
-  pesoNivel: 70,
+  // Calibrado pelo backtest (rodadas 8-22, validado em 23-31): com o modelo de gols ligado,
+  // os pontos cedidos e o nível pela tabela pouco acrescentam.
+  pesoAdversario: 0,
+  pesoNivel: 20,
   pesoGols: 50,
   incertezaComStatus: 0.25,
   perfil: "equilibrado",
   minJogos: 3,
   incluirDuvida: false,
-  k: 3,
+  k: 10,
 };
 
 /** Quanto o desvio padrão pesa no score de cada perfil. */

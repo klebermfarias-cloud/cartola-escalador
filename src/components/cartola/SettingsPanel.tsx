@@ -57,6 +57,11 @@ const PESOS: { key: keyof ModeloConfig; label: string; hint: string }[] = [
     label: "Nível do adversário (tabela)",
     hint: "Faixa do adversário na tabela: muito difícil (1º-5º), difícil (6º-10º), fácil (11º-15º), muito fácil (16º-20º)",
   },
+  {
+    key: "pesoGols",
+    label: "Modelo de gols do jogo",
+    hint: "Gols esperados de cada time (ataque x defesa): chance de não sofrer gol, gols do time e saldo",
+  },
 ];
 
 export function SettingsPanel({
