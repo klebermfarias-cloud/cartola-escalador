@@ -238,6 +238,9 @@ export interface AtletaProjetado extends Atleta {
   chanceSG: number | null;
   /** Ajuste (em pontos) pelo contexto de gols do jogo. */
   ajusteGols: number;
+  /** Bônus das dicas da rodada somado ao score (não muda a projeção exibida). */
+  bonusDicas?: number;
+  motivosDicas?: string[];
   elegivel: boolean;
   motivoInelegivel?: string;
 }

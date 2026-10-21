@@ -193,3 +193,112 @@ export function gerarDicas(
     jogosQueNaoValem,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Bônus das dicas no score
+
+/** Teto do bônus por jogador, em pontos. */
+export const BONUS_DICAS_MAX = 1;
+
+/** Quanto cada motivo soma (antes do teto). */
+export const PESOS_BONUS = {
+  destaque: 0.25,
+  emAlta: 0.35,
+  goleiro: 0.25,
+  custoBeneficio: 0.2,
+  favorito: 0.3,
+  defesaSolida: 0.3,
+  contraDefesaVazada: 0.3,
+  ataqueEmAlta: 0.25,
+};
+
+export interface BonusDicas {
+  pontos: number;
+  motivos: string[];
+}
+
+const DEFENSIVAS = new Set([1, 2, 3, 6]);
+const OFENSIVAS = new Set([4, 5]);
+
+/** Bônus (0 a BONUS_DICAS_MAX × intensidade) para cada atleta citado nas dicas. */
+export function calcularBonusDicas(
+  dicas: DicasRodada,
+  atletas: AtletaProjetado[],
+  intensidade = 1,
+): Map<number, BonusDicas> {
+  const fator = Math.max(0, Math.min(1, intensidade));
+  const ids = (xs: DicaAtleta[]) => new Set(xs.map((d) => d.atleta.id));
+  const destaques = ids(dicas.destaques);
+  const emAlta = ids(dicas.emAlta);
+  const goleiros = ids(dicas.goleiros);
+  const custo = ids(dicas.custoBeneficio);
+  const favoritos = new Set(dicas.jogosFaceis.map((j) => j.favorito));
+  const solidas = new Set(dicas.defesasSolidas.map((d) => d.clube));
+  const contraVazadas = new Set(
+    dicas.defesasVazadas.map((d) => d.adversario).filter((x): x is number => x != null),
+  );
+  const ataques = new Set(dicas.ataquesEmAlta.map((d) => d.clube));
+
+  const out = new Map<number, BonusDicas>();
+  for (const a of atletas) {
+    let pontos = 0;
+    const motivos: string[] = [];
+    const somar = (cond: boolean, valor: number, motivo: string) => {
+      if (!cond) return;
+      pontos += valor;
+      motivos.push(motivo);
+    };
+    somar(emAlta.has(a.id), PESOS_BONUS.emAlta, "em alta");
+    somar(destaques.has(a.id), PESOS_BONUS.destaque, "destaque da rodada");
+    somar(goleiros.has(a.id), PESOS_BONUS.goleiro, "goleiro em destaque");
+    somar(custo.has(a.id), PESOS_BONUS.custoBeneficio, "custo-benefício");
+    somar(favoritos.has(a.clubeId), PESOS_BONUS.favorito, "time favorito em jogo fácil");
+    somar(
+      solidas.has(a.clubeId) && DEFENSIVAS.has(a.posicaoId),
+      PESOS_BONUS.defesaSolida,
+      "defesa que não sofre gol",
+    );
+    somar(
+      contraVazadas.has(a.clubeId) && OFENSIVAS.has(a.posicaoId),
+      PESOS_BONUS.contraDefesaVazada,
+      "enfrenta defesa que sofre muitos gols",
+    );
+    somar(
+      ataques.has(a.clubeId) && OFENSIVAS.has(a.posicaoId),
+      PESOS_BONUS.ataqueEmAlta,
+      "ataque em alta",
+    );
+    if (pontos > 0) {
+      out.set(a.id, { pontos: Math.min(BONUS_DICAS_MAX, pontos) * fator, motivos });
+    }
+  }
+  return out;
+}
+
+/** Aplica o bônus das dicas ao score (a projeção exibida não muda). */
+export function aplicarBonusDicas(
+  atletas: AtletaProjetado[],
+  bonus: Map<number, BonusDicas>,
+): AtletaProjetado[] {
+  return atletas.map((a) => {
+    const b = bonus.get(a.id);
+    if (!b || b.pontos === 0) return { ...a, bonusDicas: 0, motivosDicas: [] };
+    return { ...a, score: a.score + b.pontos, bonusDicas: b.pontos, motivosDicas: b.motivos };
+  });
+}
+
+/** Gera as dicas a partir das projeções e soma o bônus de cada jogador ao score. */
+export function comBonusDasDicas(
+  atletas: AtletaProjetado[],
+  rodadas: RodadaHistorica[],
+  modelo: ModeloGols,
+  partidas: ApiPartidas | null | undefined,
+  intensidade: number,
+): { atletas: AtletaProjetado[]; dicas: DicasRodada } {
+  const dicas = gerarDicas(rodadas, modelo, partidas, atletas);
+  if (intensidade <= 0) return { atletas, dicas };
+  return {
+    atletas: aplicarBonusDicas(atletas, calcularBonusDicas(dicas, atletas, intensidade)),
+    dicas,
+  };
+}

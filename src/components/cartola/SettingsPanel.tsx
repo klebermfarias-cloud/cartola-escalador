@@ -62,6 +62,11 @@ const PESOS: { key: keyof ModeloConfig; label: string; hint: string }[] = [
     label: "Modelo de gols do jogo",
     hint: "Gols esperados de cada time (ataque x defesa): chance de não sofrer gol, gols do time e saldo",
   },
+  {
+    key: "pesoDicas",
+    label: "Bônus das dicas (até 1 pt)",
+    hint: "Soma até 1 ponto no score de quem aparece nas dicas da rodada: destaques, em alta, goleiros, custo-benefício, time favorito, defesa sólida, ataque em alta ou adversário que sofre muitos gols",
+  },
 ];
 
 export function SettingsPanel({

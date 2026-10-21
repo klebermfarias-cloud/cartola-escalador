@@ -434,3 +434,42 @@ describe("dicas da rodada", () => {
     expect(c2.marcadosUltimos5).toBe(1);
   });
 });
+
+describe("bônus das dicas", () => {
+  it("soma os motivos, respeita o teto de 1 ponto e só mexe no score", async () => {
+    const { calcularBonusDicas, aplicarBonusDicas } = await import("./dicas");
+    const ata = { ...fakeAtleta(1, 5, 8, 10), clubeId: 7 };
+    const zag = { ...fakeAtleta(2, 3, 4, 6), clubeId: 7 };
+    const outro = { ...fakeAtleta(3, 5, 3, 5), clubeId: 9 };
+    const dicas = {
+      jogosFaceis: [
+        {
+          casa: 7,
+          fora: 8,
+          golsCasa: 2,
+          golsFora: 0.5,
+          favorito: 7,
+          vantagem: 1.5,
+          chanceSGFavorito: 0.6,
+        },
+      ],
+      defesasSolidas: [{ clube: 7 } as never],
+      defesasVazadas: [{ clube: 8, adversario: 7 } as never],
+      ataquesEmAlta: [{ clube: 7 } as never],
+      destaques: [{ atleta: ata, valor: 8 }],
+      custoBeneficio: [],
+      emAlta: [{ atleta: ata, valor: 3 }],
+      goleiros: [],
+      destaquesEmDuvida: [],
+      jogosQueNaoValem: [],
+    };
+    const bonus = calcularBonusDicas(dicas, [ata, zag, outro]);
+    expect(bonus.get(1)!.pontos).toBe(1); // vários motivos, limitado a 1
+    expect(bonus.get(2)!.pontos).toBeCloseTo(0.6); // favorito + defesa sólida
+    expect(bonus.has(3)).toBe(false);
+    const [a] = aplicarBonusDicas([ata], bonus);
+    expect(a.score).toBe(ata.score + 1);
+    expect(a.projecao).toBe(ata.projecao);
+    expect(calcularBonusDicas(dicas, [ata], 0.5).get(1)!.pontos).toBe(0.5);
+  });
+});

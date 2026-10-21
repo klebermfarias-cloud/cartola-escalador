@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
   AlertTriangle,
+  Check,
   Coins,
   Flame,
   Hand,
@@ -53,18 +54,24 @@ function Vazio() {
   return <li className="text-muted-foreground">Nada de destaque nesta rodada.</li>;
 }
 
+type Marcacao = { noTime: Set<number>; noBanco: Set<number> };
+
 function ItemAtleta({
   d,
   clubes,
   onSelect,
   detalhe,
+  marcacao,
 }: {
   d: DicaAtleta;
   clubes: Clubes;
   onSelect: (a: AtletaProjetado) => void;
   detalhe: string;
+  marcacao: Marcacao;
 }) {
   const a = d.atleta;
+  const noTime = marcacao.noTime.has(a.id);
+  const noBanco = !noTime && marcacao.noBanco.has(a.id);
   return (
     <li>
       <button
@@ -77,6 +84,22 @@ function ItemAtleta({
           {POSICOES[a.posicaoId].curto}
         </span>
         <span className="min-w-0 flex-1 truncate font-medium">{a.apelido}</span>
+        {noTime && (
+          <span
+            className="flex shrink-0 items-center gap-0.5 rounded bg-[var(--gramado)] px-1 text-[10px] font-semibold text-white"
+            title="Já está no time escalado"
+          >
+            <Check className="h-2.5 w-2.5" /> no time
+          </span>
+        )}
+        {noBanco && (
+          <span
+            className="shrink-0 rounded border px-1 text-[10px] font-semibold text-muted-foreground"
+            title="Está no banco de reservas"
+          >
+            banco
+          </span>
+        )}
         <span className="shrink-0 tabular-nums text-muted-foreground">{detalhe}</span>
       </button>
     </li>
@@ -92,11 +115,17 @@ export function DicasRodada({
   dicas,
   clubes,
   onSelect,
+  noTime,
+  noBanco,
 }: {
   dicas: Dicas;
   clubes: Clubes;
   onSelect: (a: AtletaProjetado) => void;
+  /** Jogadores no campo e no banco, para marcar nas listas. */
+  noTime: Set<number>;
+  noBanco: Set<number>;
 }) {
+  const marcacao = { noTime, noBanco };
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -104,8 +133,9 @@ export function DicasRodada({
           <Lightbulb className="h-4 w-4 text-amber-500" /> Dicas da rodada
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          Leituras do modelo de gols e do histórico da temporada. Toque num jogador para ver a
-          ficha.
+          Leituras do modelo de gols e do histórico da temporada. Quem aparece aqui ganha até 1
+          ponto no score da escalação. “No time” marca quem já está escalado; toque num jogador para
+          ver a ficha.
         </p>
       </CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -206,6 +236,7 @@ export function DicasRodada({
               d={d}
               clubes={clubes}
               onSelect={onSelect}
+              marcacao={marcacao}
               detalhe={`${fmt(d.valor)} pts`}
             />
           ))}
@@ -223,6 +254,7 @@ export function DicasRodada({
               d={d}
               clubes={clubes}
               onSelect={onSelect}
+              marcacao={marcacao}
               detalhe={`${fmt(d.valor)} pts · SG ${fmtPct(d.atleta.chanceSG)}`}
             />
           ))}
@@ -240,6 +272,7 @@ export function DicasRodada({
               d={d}
               clubes={clubes}
               onSelect={onSelect}
+              marcacao={marcacao}
               detalhe={`${fmt(d.valor, 2)} pts/C$ · C$ ${fmt(d.atleta.preco)}`}
             />
           ))}
@@ -257,6 +290,7 @@ export function DicasRodada({
               d={d}
               clubes={clubes}
               onSelect={onSelect}
+              marcacao={marcacao}
               detalhe={`+${fmt(d.valor)} sobre a média`}
             />
           ))}
@@ -283,6 +317,7 @@ export function DicasRodada({
               d={{ atleta: a, valor: a.stats.media }}
               clubes={clubes}
               onSelect={onSelect}
+              marcacao={marcacao}
               detalhe={`dúvida · média ${fmt(a.stats.media)}`}
             />
           ))}

@@ -129,6 +129,12 @@ export function PlayerDetailDialog({
               </div>
             </DialogHeader>
 
+            {a.motivosDicas && a.motivosDicas.length > 0 && (
+              <p className="rounded-md bg-amber-100 px-2 py-1 text-xs text-amber-900 dark:bg-amber-500/15 dark:text-amber-200">
+                Nas dicas da rodada ({a.motivosDicas.join(", ")}): +{fmt(a.bonusDicas, 2)} pt no
+                score da escalação.
+              </p>
+            )}
             {!a.elegivel && a.motivoInelegivel && (
               <p className="rounded-md bg-amber-100 px-2 py-1 text-xs text-amber-900">
                 Fora da escalação automática: {a.motivoInelegivel}
@@ -140,6 +146,15 @@ export function PlayerDetailDialog({
                 label="Projeção"
                 value={`${fmt(a.projecao)} pts`}
                 hint="Pontuação esperada na rodada"
+              />
+              <Stat
+                label="Bônus das dicas"
+                value={a.bonusDicas ? `+${fmt(a.bonusDicas, 2)}` : "–"}
+                hint={
+                  a.motivosDicas?.length
+                    ? `Somado ao score da escalação: ${a.motivosDicas.join(", ")}`
+                    : "Não aparece nas dicas da rodada"
+                }
               />
               <Stat label="Preço" value={`C$ ${fmt(a.preco, 2)}`} />
               <Stat label="Variação" value={fmt(a.variacao, 2)} />

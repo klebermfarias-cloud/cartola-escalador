@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Home, Plane, Star, Users } from "lucide-react";
+import { ArrowLeftRight, Home, Lightbulb, Plane, Star, Users } from "lucide-react";
 import type { Banco } from "@/lib/cartola/optimizer";
 import type { AtletaProjetado } from "@/lib/cartola/types";
 import { POSICOES } from "@/lib/cartola/types";
@@ -237,6 +237,12 @@ function PlayerSpot({
           )}
         >
           {fmt(a.projecao)} pts
+          {(a.bonusDicas ?? 0) > 0 && (
+            <Lightbulb
+              className="ml-0.5 inline h-2.5 w-2.5 text-amber-300"
+              aria-label={`Nas dicas: +${fmt(a.bonusDicas, 2)} no score`}
+            />
+          )}
         </span>
         <span
           className={cn(

@@ -28,7 +28,7 @@ import {
   projetarAtletas,
   type ModeloConfig,
 } from "@/lib/cartola/projection";
-import { gerarDicas } from "@/lib/cartola/dicas";
+import { comBonusDasDicas } from "@/lib/cartola/dicas";
 import { resumirHistorico } from "@/lib/cartola/stats";
 import type { AtletaProjetado, NivelAdversario } from "@/lib/cartola/types";
 import { NIVEIS_ADVERSARIO, POSICOES } from "@/lib/cartola/types";
@@ -259,9 +259,17 @@ function Escalador({ dados }: { dados: DadosCartola }) {
       ),
     [dados, resumo, maisEscalados],
   );
-  const projetados = useMemo(
-    () => projetarAtletas(atletasBase, resumo, prefs.cfg),
-    [atletasBase, resumo, prefs.cfg],
+  // Projeção do modelo e, em seguida, o bônus das dicas da rodada somado ao score.
+  const { atletas: projetados, dicas } = useMemo(
+    () =>
+      comBonusDasDicas(
+        projetarAtletas(atletasBase, resumo, prefs.cfg),
+        dados.rodadas,
+        resumo.modeloGols,
+        dados.partidas,
+        (prefs.cfg.pesoDicas ?? 0) / 100,
+      ),
+    [atletasBase, resumo, prefs.cfg, dados.rodadas, dados.partidas],
   );
 
   // Time ideal: as maiores pontuações prováveis, sem limite de cartoletas.
@@ -318,10 +326,6 @@ function Escalador({ dados }: { dados: DadosCartola }) {
   const custoAtual = timeAtual.reduce((s, a) => s + a.preco, 0);
   const projAtual = projecaoTime(timeAtual, capitao?.id ?? null);
   const saldo = proprio ? cartoletas - custoAtual : null;
-  const dicas = useMemo(
-    () => gerarDicas(dados.rodadas, resumo.modeloGols, dados.partidas, projetados),
-    [dados.rodadas, dados.partidas, resumo, projetados],
-  );
   const escaladosIds = useMemo(
     () => new Set([...timeAtual, ...banco.reservas].map((a) => a.id)),
     [timeAtual, banco],
@@ -544,7 +548,13 @@ function Escalador({ dados }: { dados: DadosCartola }) {
             </Card>
           </div>
           <div id="dicas" className="mt-4 scroll-mt-20">
-            <DicasRodada dicas={dicas} clubes={clubes} onSelect={setDetalhe} />
+            <DicasRodada
+              dicas={dicas}
+              clubes={clubes}
+              onSelect={setDetalhe}
+              noTime={new Set(timeAtual.map((a) => a.id))}
+              noBanco={new Set(banco.reservas.map((a) => a.id))}
+            />
           </div>
         </TabsContent>
 
@@ -613,6 +623,12 @@ function ComoFunciona() {
           para os jogos recentes) dão os gols esperados de cada lado. Daí saem a chance de não
           sofrer gol (vale 5 pts para goleiro, lateral e zagueiro), os gols esperados do time (pesam
           nos gols e assistências) e o saldo esperado (pesa no técnico).
+        </li>
+        <li>
+          Dicas da rodada: quem aparece nelas ganha até 1 ponto no score da escalação (em alta,
+          destaque, goleiro em destaque, custo-benefício, time favorito, defesa que não sofre gol,
+          ataque em alta ou adversário que sofre muitos gols). A pontuação provável exibida não
+          muda; o bônus aparece na ficha do jogador. A intensidade se ajusta em “Bônus das dicas”.
         </li>
         <li>
           Os pesos foram calibrados por backtest: cada rodada passada foi prevista usando só as

@@ -33,6 +33,8 @@ export interface ModeloConfig {
   pesoNivel: number;
   /** Intensidade do ajuste pelo modelo de gols do jogo (0 a 100). */
   pesoGols: number;
+  /** Intensidade do bônus das dicas da rodada no score (100 = até 1 ponto). */
+  pesoDicas: number;
   /**
    * Quanto da incerteza sobre jogar continua depois do status "Provável" (0 a 1). O status
    * resolve a maior parte dela; 1 ignora o status (usado no backtest, que não tem status).
@@ -57,6 +59,7 @@ export const MODELO_PADRAO: ModeloConfig = {
   pesoAdversario: 0,
   pesoNivel: 20,
   pesoGols: 50,
+  pesoDicas: 100,
   incertezaComStatus: 0.25,
   perfil: "equilibrado",
   minJogos: 3,

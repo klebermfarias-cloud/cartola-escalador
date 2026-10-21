@@ -11,6 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { DadosCartola } from "../src/lib/cartola/dados";
+import { comBonusDasDicas } from "../src/lib/cartola/dicas";
 import { escalar, escolherCapitao, CAPITAO_MULT } from "../src/lib/cartola/optimizer";
 import {
   MODELO_PADRAO,
@@ -142,11 +143,18 @@ export function avaliarRodada(
     ? c.atletas.filter((a) => String(a.atleta_id) in c.alvo.pontos)
     : c.atletas;
   const base = montarAtletas({ atletas, clubes: {} }, resumo, c.partidas);
-  const proj: AtletaProjetado[] = projetar(base, resumo, {
+  const projBase: AtletaProjetado[] = projetar(base, resumo, {
     ...cfg,
     minJogos: 1,
     incertezaComStatus: comStatus ? cfg.incertezaComStatus : 1,
   });
+  const proj = comBonusDasDicas(
+    projBase,
+    c.antes,
+    resumo.modeloGols,
+    c.partidas,
+    (cfg.pesoDicas ?? 0) / 100,
+  ).atletas;
   const real = (id: number) => c.alvo.pontos[String(id)]?.[0] ?? 0;
 
   const e = escalar(proj, "auto", Number.POSITIVE_INFINITY);
