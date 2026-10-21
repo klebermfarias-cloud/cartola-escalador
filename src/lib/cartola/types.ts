@@ -152,6 +152,8 @@ export interface Jogo {
   mando: Mando | null;
   adversario: number | null;
   nivelAdversario: NivelAdversario | null;
+  gols?: number;
+  assistencias?: number;
 }
 
 export interface EstatisticasAtleta {
@@ -207,6 +209,8 @@ export interface Atleta {
   escalacoes?: number | null;
   stats: EstatisticasAtleta;
   proximo: ProximoJogo | null;
+  /** Presença nas últimas partidas do clube (para a chance de jogar). */
+  recentes: { jogouUltima: boolean; ultimas5: number; partidas: number };
 }
 
 export interface AtletaProjetado extends Atleta {
@@ -226,6 +230,14 @@ export interface AtletaProjetado extends Atleta {
   nivelAdversario: NivelAdversario | null;
   /** Ajuste (em pontos) aplicado pela faixa de dificuldade do adversário. */
   ajusteNivel: number;
+  /** Chance estimada de entrar em campo (histórico recente + status). */
+  chanceJogar: number;
+  /** Modelo de gols: gols esperados a favor e contra, e chance de não sofrer gol. */
+  golsPro: number | null;
+  golsContra: number | null;
+  chanceSG: number | null;
+  /** Ajuste (em pontos) pelo contexto de gols do jogo. */
+  ajusteGols: number;
   elegivel: boolean;
   motivoInelegivel?: string;
 }

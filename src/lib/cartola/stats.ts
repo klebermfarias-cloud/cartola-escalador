@@ -7,6 +7,7 @@ import type {
   NivelAdversario,
   RodadaHistorica,
 } from "./types";
+import { modeloGols, type ModeloGols } from "./gols";
 
 /** Pontos de scout usados para a média básica (pontuação sem gols e assistências). */
 export const PONTOS_GOL = 8;
@@ -174,6 +175,31 @@ export interface ResumoHistorico {
   porPosicaoMando: Map<string, { soma: number; n: number }>;
   /** `${pos}:${nivel}` -> pontos da posição contra cada faixa de adversário */
   porPosicaoNivel: Map<string, { soma: number; n: number }>;
+  /** clube_id -> rodadas válidas em que o clube jogou, em ordem */
+  rodadasDoClube: Map<number, number[]>;
+  /** `${jogouUltima ? 1 : 0}:${ultimas5}` -> quantos estavam nessa situação e quantos jogaram */
+  chanceJogarPorPadrao: Map<string, { n: number; jogou: number }>;
+  modeloGols: ModeloGols;
+}
+
+/** Presença do atleta nas últimas `n` partidas válidas do clube (mais recente primeiro). */
+export function presencaRecente(
+  rodadasDoClube: number[] | undefined,
+  rodadasJogadas: Set<number>,
+  ate = Number.POSITIVE_INFINITY,
+  n = 5,
+): boolean[] {
+  const out: boolean[] = [];
+  const lista = rodadasDoClube ?? [];
+  for (let i = lista.length - 1; i >= 0 && out.length < n; i--) {
+    if (lista[i] >= ate) continue;
+    out.push(rodadasJogadas.has(lista[i]));
+  }
+  return out;
+}
+
+export function chavePresenca(presenca: boolean[]): string {
+  return `${presenca[0] ? 1 : 0}:${presenca.filter(Boolean).length}`;
 }
 
 function acumular(map: Map<string, { soma: number; n: number }>, key: string, v: number) {
@@ -207,6 +233,8 @@ export function resumirHistorico(rodadas: RodadaHistorica[]): ResumoHistorico {
         mando: conf?.mando ?? null,
         adversario: conf?.adversario ?? null,
         nivelAdversario: nivelAdversario(conf?.posAdv),
+        gols: g,
+        assistencias: a,
       };
       const atletaId = Number(id);
       const lista = jogosPorAtleta.get(atletaId);
@@ -233,6 +261,45 @@ export function resumirHistorico(rodadas: RodadaHistorica[]): ResumoHistorico {
   const mediaPorPosicao = new Map<number, number>();
   for (const [pos, { soma, n }] of somaPos) mediaPorPosicao.set(pos, n ? soma / n : 0);
 
+  // Rodadas de cada clube e, para cada rodada, quem estava no elenco recente e se jogou:
+  // dá a chance empírica de jogar conforme a presença nas últimas 5 partidas.
+  const rodadasDoClube = new Map<number, number[]>();
+  const ordenadas = [...rodadas].sort((a, b) => a.rodada - b.rodada);
+  for (const r of ordenadas) {
+    for (const [clube, c] of Object.entries(r.confrontos)) {
+      if (!c.valida) continue;
+      const l = rodadasDoClube.get(Number(clube)) ?? [];
+      l.push(r.rodada);
+      rodadasDoClube.set(Number(clube), l);
+    }
+  }
+  const chanceJogarPorPadrao = new Map<string, { n: number; jogou: number }>();
+  const jogadas = new Map<number, Set<number>>();
+  const clubeAtual = new Map<number, number>();
+  for (const r of ordenadas) {
+    for (const [id, clube] of clubeAtual) {
+      const conf = r.confrontos[String(clube)];
+      if (!conf?.valida) continue;
+      const pres = presencaRecente(
+        rodadasDoClube.get(clube),
+        jogadas.get(id) ?? new Set(),
+        r.rodada,
+      );
+      if (pres.length < 5 || !pres.some(Boolean)) continue;
+      const k = chavePresenca(pres);
+      const t = chanceJogarPorPadrao.get(k) ?? { n: 0, jogou: 0 };
+      t.n++;
+      if (String(id) in r.pontos) t.jogou++;
+      chanceJogarPorPadrao.set(k, t);
+    }
+    for (const [id, [, , , clube]] of Object.entries(r.pontos)) {
+      const s = jogadas.get(Number(id)) ?? new Set<number>();
+      s.add(r.rodada);
+      jogadas.set(Number(id), s);
+      clubeAtual.set(Number(id), clube);
+    }
+  }
+
   return {
     jogosPorAtleta,
     rodadasPorClube,
@@ -241,5 +308,8 @@ export function resumirHistorico(rodadas: RodadaHistorica[]): ResumoHistorico {
     cedidasMando,
     porPosicaoMando,
     porPosicaoNivel,
+    rodadasDoClube,
+    chanceJogarPorPadrao,
+    modeloGols: modeloGols(rodadas),
   };
 }

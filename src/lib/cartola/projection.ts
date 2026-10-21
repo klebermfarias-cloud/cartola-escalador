@@ -1,7 +1,9 @@
+import { ajustePorGols } from "./gols";
 import {
   calcularEstatisticas,
   estatisticasVazias,
   nivelAdversario,
+  presencaRecente,
   shrink,
   type ResumoHistorico,
 } from "./stats";
@@ -29,6 +31,13 @@ export interface ModeloConfig {
   pesoAdversario: number;
   /** Intensidade do ajuste pela faixa do adversário na tabela (0 a 100). */
   pesoNivel: number;
+  /** Intensidade do ajuste pelo modelo de gols do jogo (0 a 100). */
+  pesoGols: number;
+  /**
+   * Quanto da incerteza sobre jogar continua depois do status "Provável" (0 a 1). O status
+   * resolve a maior parte dela; 1 ignora o status (usado no backtest, que não tem status).
+   */
+  incertezaComStatus: number;
   perfil: PerfilRisco;
   /** Nº mínimo de jogos para o atleta ser escalável. */
   minJogos: number;
@@ -45,6 +54,8 @@ export const MODELO_PADRAO: ModeloConfig = {
   pesoBasica: 10,
   pesoAdversario: 40,
   pesoNivel: 70,
+  pesoGols: 50,
+  incertezaComStatus: 0.25,
   perfil: "equilibrado",
   minJogos: 3,
   incluirDuvida: false,
@@ -146,6 +157,17 @@ export function montarAtletas(
       escalacoes: escalacoes?.get(a.atleta_id) ?? null,
       stats,
       proximo: proximos.get(a.clube_id) ?? null,
+      recentes: (() => {
+        const pres = presencaRecente(
+          resumo.rodadasDoClube.get(a.clube_id),
+          new Set(jogos.map((j) => j.rodada)),
+        );
+        return {
+          jogouUltima: pres[0] ?? false,
+          ultimas5: pres.filter(Boolean).length,
+          partidas: pres.length,
+        };
+      })(),
     };
   });
 }
@@ -181,6 +203,24 @@ export function projetarAtletas(
   const somaPesos = pesos.media + pesos.mando + pesos.forma + pesos.mediana + pesos.basica || 1;
   const alpha = Math.max(0, Math.min(1, cfg.pesoAdversario / 100));
   const beta = Math.max(0, Math.min(1, (cfg.pesoNivel ?? 0) / 100));
+  const gamma = Math.max(0, Math.min(1.5, (cfg.pesoGols ?? 0) / 100));
+  const incerteza = Math.max(0, Math.min(1, cfg.incertezaComStatus ?? 1));
+
+  // Chance de jogar conforme a presença recente, medida na própria temporada.
+  let totalN = 0;
+  let totalJogou = 0;
+  for (const t of resumo.chanceJogarPorPadrao.values()) {
+    totalN += t.n;
+    totalJogou += t.jogou;
+  }
+  const chanceGeral = totalN ? totalJogou / totalN : 0.6;
+  const chancePorPresenca = (a: Atleta) => {
+    const r = a.recentes;
+    if (r.partidas === 0) return chanceGeral;
+    if (r.ultimas5 === 0) return 0.1;
+    const t = resumo.chanceJogarPorPadrao.get(`${r.jogouUltima ? 1 : 0}:${r.ultimas5}`);
+    return shrink(t && t.n ? t.jogou / t.n : null, t?.n ?? 0, chanceGeral, 20);
+  };
   const lambda = LAMBDA_RISCO[cfg.perfil];
 
   // Média por posição — do histórico ou, sem histórico, da média oficial do mercado.
@@ -251,10 +291,23 @@ export function projetarAtletas(
     const nivel = nivelAdversario(a.proximo?.posicaoTabelaAdversario);
     const ajusteNivel = nivel ? beta * efeitoNivel(a.posicaoId, nivel) : 0;
 
-    let projecao = base + ajuste + ajusteNivel;
-    if (a.statusId === STATUS.DUVIDA) projecao *= FATOR_DUVIDA;
-    // Quem entra em poucas partidas do clube tende a ser reserva: risco de não jogar.
-    if (s.jogos > 0 && s.historico.length > 0) projecao *= fatorParticipacao(s.participacao);
+    // Modelo de gols: chance de SG, gols esperados do time e saldo, comparados com os
+    // jogos que ele já disputou.
+    const gols =
+      a.proximo && gamma > 0
+        ? ajustePorGols(resumo.modeloGols, a.posicaoId, a.clubeId, s.historico, a.proximo)
+        : null;
+    const previsao = a.proximo
+      ? resumo.modeloGols.preverJogo(a.clubeId, a.proximo.adversario, a.proximo.mando)
+      : null;
+    const ajusteGols = gols ? gamma * gols.pontos : 0;
+
+    // Chance de jogar: presença recente, quase toda resolvida pelo status "Provável".
+    const pPresenca = chancePorPresenca(a);
+    let chanceJogar = 1 - (1 - pPresenca) * incerteza;
+    if (a.statusId === STATUS.DUVIDA) chanceJogar *= FATOR_DUVIDA;
+
+    const projecao = (base + ajuste + ajusteNivel + ajusteGols) * chanceJogar;
 
     const score = projecao - lambda * s.desvio;
 
@@ -275,6 +328,11 @@ export function projetarAtletas(
       chanceMando,
       nivelAdversario: nivel,
       ajusteNivel,
+      chanceJogar,
+      golsPro: previsao?.golsPro ?? null,
+      golsContra: previsao?.golsContra ?? null,
+      chanceSG: previsao?.chanceSG ?? null,
+      ajusteGols,
       elegivel: !motivo,
       motivoInelegivel: motivo,
     };

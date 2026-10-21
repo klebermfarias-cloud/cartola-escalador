@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "build:artefato": "npm run build && node scripts/artefato.mjs"
+    "build:artefato": "npm run build && node scripts/artefato.mjs",
+    "backtest": "tsx scripts/backtest.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

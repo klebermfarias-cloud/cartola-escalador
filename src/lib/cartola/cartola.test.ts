@@ -89,6 +89,12 @@ function fakeAtleta(id: number, pos: PosicaoId, score: number, preco: number): A
     chanceMando: null,
     nivelAdversario: null,
     ajusteNivel: 0,
+    chanceJogar: 1,
+    golsPro: null,
+    golsContra: null,
+    chanceSG: null,
+    ajusteGols: 0,
+    recentes: { jogouUltima: true, ultimas5: 5, partidas: 5 },
     elegivel: true,
   };
 }
