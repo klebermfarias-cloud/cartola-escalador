@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeftRight, Clock, Loader2, Star, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  Clock,
+  Lightbulb,
+  Loader2,
+  Star,
+  Users,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,12 +28,14 @@ import {
   projetarAtletas,
   type ModeloConfig,
 } from "@/lib/cartola/projection";
+import { gerarDicas } from "@/lib/cartola/dicas";
 import { resumirHistorico } from "@/lib/cartola/stats";
 import type { AtletaProjetado, NivelAdversario } from "@/lib/cartola/types";
 import { NIVEIS_ADVERSARIO, POSICOES } from "@/lib/cartola/types";
 import { COR_NIVEL } from "./Indicadores";
 import { cn } from "@/lib/utils";
 import { fmt, fmtEscalacoes, STATUS_MERCADO } from "./format";
+import { DicasRodada } from "./DicasRodada";
 import { PlayerDetailDialog } from "./PlayerDetailDialog";
 import { PlayersTable } from "./PlayersTable";
 import { SettingsPanel } from "./SettingsPanel";
@@ -308,6 +318,10 @@ function Escalador({ dados }: { dados: DadosCartola }) {
   const custoAtual = timeAtual.reduce((s, a) => s + a.preco, 0);
   const projAtual = projecaoTime(timeAtual, capitao?.id ?? null);
   const saldo = proprio ? cartoletas - custoAtual : null;
+  const dicas = useMemo(
+    () => gerarDicas(dados.rodadas, resumo.modeloGols, dados.partidas, projetados),
+    [dados.rodadas, dados.partidas, resumo, projetados],
+  );
   const escaladosIds = useMemo(
     () => new Set([...timeAtual, ...banco.reservas].map((a) => a.id)),
     [timeAtual, banco],
@@ -374,6 +388,17 @@ function Escalador({ dados }: { dados: DadosCartola }) {
             <div className="order-1 min-w-0 space-y-3 lg:order-2">
               {escalacao ? (
                 <>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        document.getElementById("dicas")?.scrollIntoView({ behavior: "smooth" })
+                      }
+                      className="flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium hover:bg-accent"
+                    >
+                      <Lightbulb className="h-3.5 w-3.5 text-amber-500" /> Dicas da rodada
+                    </button>
+                  </div>
                   <ResumoTime
                     formacao={escalacao.formacao}
                     custo={custoAtual}
@@ -517,6 +542,9 @@ function Escalador({ dados }: { dados: DadosCartola }) {
                 )}
               </CardContent>
             </Card>
+          </div>
+          <div id="dicas" className="mt-4 scroll-mt-20">
+            <DicasRodada dicas={dicas} clubes={clubes} onSelect={setDetalhe} />
           </div>
         </TabsContent>
 

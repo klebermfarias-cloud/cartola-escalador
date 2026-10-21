@@ -143,10 +143,6 @@ export function PlayerDetailDialog({
               />
               <Stat label="Preço" value={`C$ ${fmt(a.preco, 2)}`} />
               <Stat label="Variação" value={fmt(a.variacao, 2)} />
-              <Stat
-                label="Mín. p/ valorizar"
-                value={a.minimoValorizar != null ? fmt(a.minimoValorizar) : "–"}
-              />
               {a.escalacoes != null && (
                 <Stat
                   label="Escalações"

@@ -126,12 +126,6 @@ export function PlayersTable({
         get: (a) => a.escalacoes ?? null,
         render: (a) => fmtEscalacoes(a.escalacoes),
       },
-      {
-        key: "minimo",
-        label: "Mín. val.",
-        title: "Mínimo para valorizar",
-        get: (a) => a.minimoValorizar,
-      },
     ],
     [],
   );

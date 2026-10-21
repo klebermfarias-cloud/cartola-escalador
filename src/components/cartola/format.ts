@@ -30,10 +30,45 @@ export function siglaClube(clubes: Clubes, id: number | null | undefined): strin
   return clubes[String(id)]?.abreviacao ?? String(id);
 }
 
+/** A API manda só a sigla no nome dos clubes; estes são os nomes para exibição. */
+const NOMES_CLUBES: Record<string, string> = {
+  ACG: "Atlético-GO",
+  BAH: "Bahia",
+  BOT: "Botafogo",
+  CAM: "Atlético-MG",
+  CAP: "Athletico-PR",
+  CEA: "Ceará",
+  CFC: "Coritiba",
+  CHA: "Chapecoense",
+  COR: "Corinthians",
+  CRU: "Cruzeiro",
+  CUI: "Cuiabá",
+  FLA: "Flamengo",
+  FLU: "Fluminense",
+  FOR: "Fortaleza",
+  GOI: "Goiás",
+  GRE: "Grêmio",
+  INT: "Internacional",
+  JUV: "Juventude",
+  MIR: "Mirassol",
+  PAL: "Palmeiras",
+  RBB: "Bragantino",
+  REM: "Remo",
+  SAN: "Santos",
+  SAO: "São Paulo",
+  SPT: "Sport",
+  VAS: "Vasco",
+  VIT: "Vitória",
+};
+
 export function nomeClube(clubes: Clubes, id: number | null | undefined): string {
   if (id == null) return "–";
   const c = clubes[String(id)];
-  return c?.nome_fantasia ?? c?.nome ?? String(id);
+  if (!c) return String(id);
+  const nome = c.nome_fantasia ?? c.nome;
+  // Quando a API manda a sigla no lugar do nome, usa o nome conhecido.
+  if (!nome || nome === c.abreviacao) return NOMES_CLUBES[c.abreviacao] ?? c.abreviacao;
+  return nome;
 }
 
 export const STATUS_NOMES: Record<number, string> = {

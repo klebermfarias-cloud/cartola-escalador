@@ -402,3 +402,35 @@ describe("modelo de gols", () => {
     expect(m.preverJogo(3, 2, "C")!.chanceSG).toBeGreaterThan(m.preverJogo(3, 1, "C")!.chanceSG);
   });
 });
+
+describe("dicas da rodada", () => {
+  it("conta a sequência sem sofrer gol e os gols dos últimos 5 jogos", async () => {
+    const { modeloGols } = await import("./gols");
+    const { resumoDefesas } = await import("./dicas");
+    // Clube 1 x 2 em 6 rodadas; o clube 2 marca nas rodadas 1 e 2 e depois zera.
+    const rodadas = [1, 2, 3, 4, 5, 6].map((r) =>
+      compactarRodada(
+        r,
+        {
+          atletas: {
+            "11": { pontuacao: 5, posicao_id: 5, clube_id: 1, scout: { G: 1 } },
+            "21": { pontuacao: 2, posicao_id: 5, clube_id: 2, scout: { G: r <= 2 ? 1 : 0 } },
+          },
+        },
+        { partidas: [{ clube_casa_id: 1, clube_visitante_id: 2 }] },
+      ),
+    );
+    const defesas = resumoDefesas(rodadas, modeloGols(rodadas), {
+      partidas: [{ clube_casa_id: 2, clube_visitante_id: 1 }],
+    });
+    const c1 = defesas.find((d) => d.clube === 1)!;
+    const c2 = defesas.find((d) => d.clube === 2)!;
+    expect(c1.sequenciaSemSofrer).toBe(4);
+    expect(c1.semSofrerUltimos5).toBe(4);
+    expect(c1.sofridosUltimos5).toBe(1);
+    expect(c1.adversario).toBe(2);
+    expect(c1.emCasa).toBe(false);
+    expect(c2.sequenciaSofrendo).toBe(6);
+    expect(c2.marcadosUltimos5).toBe(1);
+  });
+});
